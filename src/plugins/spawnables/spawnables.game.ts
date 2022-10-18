@@ -287,6 +287,20 @@ export const SpawnablesModule = defineModule<GameState, SpawnablesModuleState>({
     });
 
     registerPrefab(ctx, {
+      name: "grunt",
+      create: (ctx, remote) => {
+        const container = addEntity(ctx.world);
+        addTransformComponent(ctx.world, container);
+        addRemoteNodeComponent(ctx, container);
+
+        const eid = createGLTFEntity(ctx, '/gltf/grunt.glb', { createTrimesh: false, isStatic: false });
+        addChild(container, eid);
+
+        return container;
+      }
+    })
+
+    registerPrefab(ctx, {
       name: "black-mirror-ball",
       create: (ctx, remote) => {
         const eid = createBall(ctx, 1, blackMirrorMaterial, remote);

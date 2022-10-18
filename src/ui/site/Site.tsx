@@ -10,11 +10,7 @@ export default function Site() {
     <div className="Site flex flex-column">
       <NavigationBar />
       <div className="grow">
-        <Scroll type="scroll">
-          <HeroSection />
-          <BlogSection />
-          <FooterSection />
-        </Scroll>
+            <h1>Crashgiants</h1>
       </div>
     </div>
   );

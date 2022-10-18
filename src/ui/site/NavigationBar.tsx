@@ -9,9 +9,8 @@ import { isMobileDevice } from "../utils/common";
 export function Logo() {
   return (
     <div className="inline-flex flex-column items-end gap-xxs">
-      <img height={20} src={LogoFullSVG} alt="Third Room" />
       <Text variant="b3" weight="medium" className="uppercase">
-        Tech Preview
+        Crash Giants
       </Text>
     </div>
   );
@@ -31,9 +30,9 @@ export function NavigationBar() {
             Chat
           </Text>
         </a>
-        <a href="https://github.com/matrix-org/thirdroom/discussions" target="_blank">
+        <a href="https://twitter.com/CrashGiants" target="_blank">
           <Text variant="b2" weight="medium">
-            Discussions
+            Twitter
           </Text>
         </a>
         {!isMobileDevice() && <Button onClick={() => navigate("/login")}>Login</Button>}

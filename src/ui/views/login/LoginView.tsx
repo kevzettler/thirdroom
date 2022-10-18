@@ -282,7 +282,7 @@ export default function LoginView() {
         <div className="flex items-center gap-sm">
           <Icon src={PlanetIC} size="lg" />
           <Text variant="h2" weight="bold">
-            Third Room
+            CrashGiants Login
           </Text>
         </div>
         <form ref={formRef} className="LoginView__form flex flex-column gap-md" onSubmit={handleLogin}>
@@ -335,7 +335,7 @@ export default function LoginView() {
                   getMatchingClientConfig(platform, result.oidc.issuer)?.guestKeycloakIdpHint ? (
                     <>
                       <Button size="lg" variant="primary" type="submit" disabled={authenticating}>
-                        {authenticating ? <Dots color="on-primary" /> : "Continue as User"}
+                        {authenticating ? <Dots color="on-primary" /> : "Login"}
                       </Button>
                       <Text
                         className="LoginView__orDivider flex items-center gap-sm"
