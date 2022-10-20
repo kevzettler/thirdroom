@@ -38,7 +38,7 @@ import { disposeGLTFResource, GLTFResource, inflateGLTFScene } from "../../engin
 import { NOOP } from "../../engine/config.common";
 import { addRemoteNodeComponent } from "../../engine/node/node.game";
 import { createRemotePerspectiveCamera } from "../../engine/camera/camera.game";
-import { registerPrefab } from "../../engine/prefab/prefab.game";
+import { createPrefabEntity, registerPrefab } from "../../engine/prefab/prefab.game";
 import { CharacterControllerType, SceneCharacterControllerComponent } from "../../engine/gltf/MX_character_controller";
 import { createFlyPlayerRig, FlyPlayerRig } from "../FlyCharacterController";
 import { createContainerizedAvatar } from "../avatar";
@@ -181,6 +181,9 @@ async function onEnterWorld(ctx: GameState, message: EnterWorldMessage) {
   const network = getModule(ctx, NetworkModule);
   await waitUntil(() => network.peerIdToIndex.has(network.peerId));
   loadPlayerRig(ctx);
+  const grunt = createPrefabEntity(ctx, 'grunt');
+  addChild(ctx.activeScene, grunt);
+  debugger
 }
 
 function onExitWorld(ctx: GameState, message: ExitWorldMessage) {
@@ -353,6 +356,7 @@ function loadPlayerRig(ctx: GameState) {
     spawnEntity(ctx, spawnPoints, playerRig);
   }
 
+  debugger
   addChild(ctx.activeScene, playerRig);
 }
 

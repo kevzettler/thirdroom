@@ -292,6 +292,12 @@ export const SpawnablesModule = defineModule<GameState, SpawnablesModuleState>({
         const container = addEntity(ctx.world);
         addTransformComponent(ctx.world, container);
         addRemoteNodeComponent(ctx, container);
+        Transform.position[container].set([
+          3.4000000953674316,
+          0.9949825406074524,
+          1.7115917205810547
+        ]);
+        Transform.scale[container].set([1.5, 1.5, 1.5]);
 
         const eid = createGLTFEntity(ctx, '/gltf/grunt.glb', { createTrimesh: false, isStatic: false });
         addChild(container, eid);
