@@ -5,6 +5,7 @@ import crossOriginIsolation from "vite-plugin-cross-origin-isolation";
 import pluginRewriteAll from "@thirdroom/vite-plugin-rewrite-all";
 import { serviceWorkerPlugin } from "@gautemo/vite-plugin-service-worker";
 import path from "path";
+import mkcert from 'vite-plugin-mkcert';
 
 import testnetServerPlugin from "./src/testnet";
 
@@ -13,8 +14,10 @@ export default defineConfig({
   appType: "mpa",
   server: {
     port: 3000,
+    https: true
   },
   plugins: [
+    mkcert(),
     pluginRewriteAll({
       rewrites: [{ from: /\/logviewer$/, to: "/logviewer.html" }],
     }),
