@@ -27,7 +27,7 @@ import {
   GLTFViewerLoadGLTFMessage,
   ExitedWorldMessage,
   GLTFViewerLoadErrorMessage,
-  GLTFViewerLoadedMessage,
+  GLTFViewerLoadedMessage, f
 } from "./thirdroom.common";
 import { createRemoteImage } from "../../engine/image/image.game";
 import { createRemoteTexture } from "../../engine/texture/texture.game";
@@ -183,6 +183,7 @@ async function onEnterWorld(ctx: GameState, message: EnterWorldMessage) {
   loadPlayerRig(ctx);
   const grunt = createPrefabEntity(ctx, 'grunt');
   addChild(ctx.activeScene, grunt);
+  addChild(ctx.activeScene, createPrefabEntity(ctx, 'mecha'));
   debugger
 }
 
@@ -356,7 +357,6 @@ function loadPlayerRig(ctx: GameState) {
     spawnEntity(ctx, spawnPoints, playerRig);
   }
 
-  debugger
   addChild(ctx.activeScene, playerRig);
 }
 

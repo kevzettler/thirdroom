@@ -293,9 +293,9 @@ export const SpawnablesModule = defineModule<GameState, SpawnablesModuleState>({
         addTransformComponent(ctx.world, container);
         addRemoteNodeComponent(ctx, container);
         Transform.position[container].set([
-          3.4000000953674316,
+          6.4000000953674316,
           0.9949825406074524,
-          1.7115917205810547
+          3.7115917205810547
         ]);
         Transform.scale[container].set([1.5, 1.5, 1.5]);
 
@@ -305,6 +305,45 @@ export const SpawnablesModule = defineModule<GameState, SpawnablesModuleState>({
         return container;
       }
     })
+
+    registerPrefab(ctx, {
+      name: "mecha",
+      create: (ctx, remote) => {
+        const container = addEntity(ctx.world);
+        addTransformComponent(ctx.world, container);
+        addRemoteNodeComponent(ctx, container);
+        Transform.position[container].set([
+          3.4000000953674316,
+          0.9949825406074524,
+          1.7115917205810547
+        ]);
+        Transform.scale[container].set([1.5, 1.5, 1.5]);
+
+        const eid = createGLTFEntity(ctx, '/gltf/mecha.glb', { createTrimesh: false, isStatic: false });
+        addChild(container, eid);
+
+        return container;
+      }
+    })
+
+    registerPrefab(ctx, {
+      name: "player-test",
+      create: (ctx, remote) => {
+        const container = addEntity(ctx.world);
+        addTransformComponent(ctx.world, container);
+        addRemoteNodeComponent(ctx, container);
+        Transform.position[container].set([
+          3.4000000953674316,
+          0.9949825406074524,
+          1.7115917205810547
+        ]);
+        Transform.scale[container].set([1.5, 1.5, 1.5]);
+
+        const eid = createGLTFEntity(ctx, "/gltf/full-animation-rig.glb", { createTrimesh: false, isStatic: false });
+        addChild(container, eid);
+
+      }
+    });
 
     registerPrefab(ctx, {
       name: "black-mirror-ball",
