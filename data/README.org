@@ -1,0 +1,3 @@
+* Thirdroom data
+
+This /data directory is a volume for docker compose and contains related container configs and data
