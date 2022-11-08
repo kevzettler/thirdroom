@@ -29,7 +29,7 @@ services:
     volumes:
       - ./data/synapse:/data
   nginx:
-    image: docker.io/nginx/1.22.1-alpine
+    image: docker.io/nginx:1.22.1-alpine
     volumes:
       - ./data/nginx:/etc/nginx
     ports:
