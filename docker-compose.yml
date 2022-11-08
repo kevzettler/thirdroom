@@ -18,6 +18,9 @@ services:
       - "3478:3478"
     volumes:
       - ./data/coturn:/etc/coturn
+
+  # generate configs with
+  # docker-compose run --rm -e SYNAPSE_SERVER_NAME=my.matrix.host -e SYNAPSE_REPORT_STATS=yes synapse generate
   synapse:
     image: docker.io/matrixdotorg/synapse
     restart: unless-stopped
@@ -26,8 +29,15 @@ services:
       - SYNAPSE_REPORT_STATS=no
     ports:
       - 8448:8448/tcp
+      - 8008:8008/tcp
     volumes:
       - ./data/synapse:/data
+
+
+  # generate config with
+  # docker run --name tmp-nginx-container -d nginx
+  # docker cp tmp-nginx-container:/etc/nginx/nginx.conf ./data/nginx/nginx.conf
+  # docker rm -f tmp-nginx-container
   nginx:
     image: docker.io/nginx:1.22.1-alpine
     volumes:
