@@ -27,12 +27,17 @@ services:
     environment:
       - SYNAPSE_SERVER_NAME=crashgiants.io
       - SYNAPSE_REPORT_STATS=no
-    ports:
-      - 8448:8448/tcp
-      - 8008:8008/tcp
+    # ports:
+    #   - 8448:8448/tcp
+    #   - 8008:8008/tcp
+    #   - 8009:8009/tcp
     volumes:
       - ./data/synapse:/data
-
+    depends_on:
+      - postgres
+    links:
+      - coturn
+      - postgres
 
   # generate config with
   # docker run --name tmp-nginx-container -d nginx
@@ -42,19 +47,34 @@ services:
     image: docker.io/nginx:1.22.1-alpine
     volumes:
       - ./data/nginx:/etc/nginx
+      - ./data/certbot/conf:/etc/letsencrypt
+      - ./data/certbot/www:/var/www/certbot
     ports:
-      - "80:80"
-  # db:
-  #   image: docker.io/postgres:12-alpine
-  #   # Change that password, of course!
-  #   environment:
-  #     - POSTGRES_USER=synapse
-  #     - POSTGRES_PASSWORD=changeme
-  #     # ensure the database gets created correctly
-  #     # https://matrix-org.github.io/synapse/latest/postgres.html#set-up-database
-  #     - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
-  #   volumes:
-  #     # You may store the database tables in a local folder..
-  #     - ./data/schemas:/var/lib/postgresql/data
-  #     # .. or store them on some high performance storage for better results
-  #     # - /path/to/ssd/storage:/var/lib/postgresql/data
+      - 80:80/tcp
+      - 443:443/tcp
+    links:
+      - synapse
+
+  # https://www.programonaut.com/setup-ssl-with-docker-nginx-and-lets-encrypt/
+  certbot:
+    image: docker.io/certbot/certbot
+    volumes:
+      - ./data/certbot/conf:/etc/letsencrypt
+      - ./data/certbot/www:/var/www/certbot
+    command: certonly --webroot -w /var/www/certbot --force-renewal --email admin@radcade.com -d crashgiants.io -d www.crashgiants.io -d matrix.crashgiants.io --agree-tos
+
+  postgres:
+    image: docker.io/postgres:15.0-alpine
+    # Change that password, of course!
+    environment:
+      - POSTGRES_USER=synapse
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=synapse
+      # ensure the database gets created correctly
+      # https://matrix-org.github.io/synapse/latest/postgres.html#set-up-database
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      # You may store the database tables in a local folder..
+      - ./data/postgres:/var/lib/postgresql/data
+      # .. or store them on some high performance storage for better results
+      # - /path/to/ssd/storage:/var/lib/postgresql/data
