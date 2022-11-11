@@ -1,11 +1,7 @@
 import { defineResource, LocalResource, PropType, RemoteResource } from "./ResourceDefinition";
 import { AccessorComponentType, AccessorType } from "../accessor/accessor.common";
 import { AudioEmitterDistanceModel, AudioEmitterOutput, AudioEmitterType } from "../audio/audio.common";
-import { BufferViewTarget } from "../bufferView/bufferView.common";
-import { CameraType } from "../camera/camera.common";
-import { MaterialAlphaMode, MaterialType } from "../material/material.common";
 import { InstancedMeshAttributeIndex, MeshPrimitiveAttributeIndex, MeshPrimitiveMode } from "../mesh/mesh.common";
-import { TextureEncoding } from "../texture/texture.common";
 
 export const NametagResource = defineResource("nametag", {
   name: PropType.string(),
@@ -40,6 +36,7 @@ export enum SamplerMapping {
   EquirectangularRefractionMapping,
   CubeUVReflectionMapping,
 }
+
 export const SamplerResource = defineResource("sampler", {
   name: PropType.string({ default: "Sampler", script: true }),
   magFilter: PropType.enum(SamplerMagFilter, { default: SamplerMagFilter.LINEAR, script: true, mutable: false }),
@@ -55,14 +52,29 @@ export const SamplerResource = defineResource("sampler", {
 export type RemoteSampler = RemoteResource<typeof SamplerResource>;
 export type LocalSampler = LocalResource<typeof SamplerResource>;
 
+export const BufferResource = defineResource("buffer", {
+  name: PropType.string({ default: "Buffer", script: true }),
+  uri: PropType.string({ script: true, mutable: false }),
+  data: PropType.arrayBuffer({ script: true }),
+});
+export type RemoteBuffer = RemoteResource<typeof BufferResource>;
+export type LocalBuffer = LocalResource<typeof BufferResource>;
+
+export enum BufferViewTarget {
+  None = 0,
+  ArrayBuffer = 34962,
+  ElementArrayBuffer = 34963,
+}
 export const BufferViewResource = defineResource("buffer-view", {
   name: PropType.string({ default: "BufferView", script: true }),
-  buffer: PropType.arraybuffer({ mutable: false, required: true, script: true }),
+  buffer: PropType.ref(BufferResource, { mutable: false, required: true, script: true }),
   byteOffset: PropType.u32({ mutable: false, script: true }),
   byteLength: PropType.u32({ mutable: false, required: true, script: true }),
   byteStride: PropType.u32({ min: 4, max: 252, mutable: false, script: true }),
   target: PropType.enum(BufferViewTarget, { default: BufferViewTarget.None, mutable: false, script: true }),
 });
+export type RemoteBufferView = RemoteResource<typeof BufferViewResource>;
+export type LocalBufferView = LocalResource<typeof BufferViewResource>;
 
 export const AudioDataResource = defineResource("audio-data", {
   name: PropType.string({ default: "AudioData", script: true }),
@@ -105,6 +117,10 @@ export const AudioEmitterResource = defineResource("audio-emitter", {
   output: PropType.enum(AudioEmitterOutput, { default: AudioEmitterOutput.Environment }),
 });
 
+export enum ImageFormat {
+  RGBA = "rgba",
+  RGBE = "rgbe",
+}
 export const ImageResource = defineResource("image", {
   name: PropType.string({ default: "Image", script: true }),
   uri: PropType.string({ script: true, mutable: false }),
@@ -112,13 +128,21 @@ export const ImageResource = defineResource("image", {
   bufferView: PropType.ref(BufferViewResource, { script: true, mutable: false }),
   flipY: PropType.bool({ script: true, mutable: false }),
 });
+export type RemoteImage = RemoteResource<typeof ImageResource>;
+export type LocalImage = LocalResource<typeof ImageResource>;
 
+export enum TextureEncoding {
+  Linear = 3000,
+  sRGB = 3001,
+}
 export const TextureResource = defineResource("texture", {
   name: PropType.string({ default: "Texture", script: true }),
   sampler: PropType.ref(SamplerResource, { script: true, mutable: false }),
   source: PropType.ref(ImageResource, { script: true, mutable: false }),
   encoding: PropType.enum(TextureEncoding, { default: TextureEncoding.Linear, script: true, mutable: false }),
 });
+export type RemoteTexture = RemoteResource<typeof TextureResource>;
+export type LocalTexture = LocalResource<typeof TextureResource>;
 
 export const ReflectionProbeResource = defineResource("reflection-probe", {
   name: PropType.string({ default: "ReflectionProbe", script: true }),
@@ -126,6 +150,15 @@ export const ReflectionProbeResource = defineResource("reflection-probe", {
   size: PropType.vec3({ script: true, mutable: false }),
 });
 
+export enum MaterialAlphaMode {
+  OPAQUE,
+  MASK,
+  BLEND,
+}
+export enum MaterialType {
+  Standard,
+  Unlit,
+}
 export const MaterialResource = defineResource("material", {
   name: PropType.string({ default: "Material", script: true }),
   type: PropType.enum(MaterialType, { required: true, script: true }),
@@ -142,7 +175,7 @@ export const MaterialResource = defineResource("material", {
   occlusionTextureStrength: PropType.f32({ default: 1, script: true }),
   occlusionTexture: PropType.ref(TextureResource, { script: true }),
   emissiveStrength: PropType.f32({ default: 1, script: true }),
-  emissiveFactor: PropType.rgb({ default: [1, 1, 1], script: true }),
+  emissiveFactor: PropType.rgb({ default: [0, 0, 0], script: true }),
   emissiveTexture: PropType.ref(TextureResource, { script: true }),
   ior: PropType.f32({ default: 1.5, script: true }),
   transmissionFactor: PropType.f32({ default: 0, script: true }),
@@ -153,6 +186,8 @@ export const MaterialResource = defineResource("material", {
   attenuationDistance: PropType.f32({ default: 0, script: true }),
   attenuationColor: PropType.rgb({ default: [1, 1, 1], script: true }),
 });
+export type RemoteMaterial = RemoteResource<typeof MaterialResource>;
+export type LocalMaterial = LocalResource<typeof MaterialResource>;
 
 export enum LightType {
   Directional,
@@ -172,6 +207,10 @@ export const LightResource = defineResource("light", {
 export type RemoteLight = RemoteResource<typeof LightResource>;
 export type LocalLight = LocalResource<typeof LightResource>;
 
+export enum CameraType {
+  Perspective,
+  Orthographic,
+}
 export const CameraResource = defineResource("camera", {
   // Shared properties between camera types
   name: PropType.string({ default: "Camera", script: true }),
@@ -187,8 +226,10 @@ export const CameraResource = defineResource("camera", {
   yfov: PropType.f32({ minExclusive: 0, script: true }),
   // 0 means auto aspect ratio
   aspectRatio: PropType.f32({ min: 0, default: 0, script: true }),
-  projectionMatrixNeedsUpdate: PropType.bool({ default: true, script: false, mutable: false }),
+  projectionMatrixNeedsUpdate: PropType.bool({ default: true, script: true }),
 });
+export type RemoteCamera = RemoteResource<typeof CameraResource>;
+export type LocalCamera = LocalResource<typeof CameraResource>;
 
 export const SparseAccessorResource = defineResource("sparse-accessor", {
   count: PropType.u32({ min: 1, mutable: false, required: true, script: true }),
