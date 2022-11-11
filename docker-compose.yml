@@ -18,6 +18,7 @@ services:
       - "3478:3478"
     volumes:
       - ./data/coturn:/etc/coturn
+      - ./data/certbot/conf:/etc/letsencrypt
 
   # generate configs with
   # docker-compose run --rm -e SYNAPSE_SERVER_NAME=my.matrix.host -e SYNAPSE_REPORT_STATS=yes synapse generate
@@ -49,9 +50,12 @@ services:
       - ./data/nginx:/etc/nginx
       - ./data/certbot/conf:/etc/letsencrypt
       - ./data/certbot/www:/var/www/certbot
+  # open 8448 with firewall
+  #   ufw allow 3478/tcp
     ports:
       - 80:80/tcp
       - 443:443/tcp
+      - 8448:8448/tcp
     links:
       - synapse
 
@@ -63,6 +67,8 @@ services:
       - ./data/certbot/www:/var/www/certbot
     command: certonly --webroot -w /var/www/certbot --force-renewal --email admin@radcade.com -d crashgiants.io -d www.crashgiants.io -d matrix.crashgiants.io --agree-tos
 
+  # connect with
+  # docker exec -it crashgiants_postgres_1 psql -U synapse
   postgres:
     image: docker.io/postgres:15.0-alpine
     # Change that password, of course!

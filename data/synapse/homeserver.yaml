@@ -9,7 +9,7 @@
 # For more information on how to configure Synapse, including a complete accounting of
 # each option, go to docs/usage/configuration/config_documentation.md or
 # https://matrix-org.github.io/synapse/latest/usage/configuration/config_documentation.html
-server_name: "crashgiants.io"
+server_name: "matrix.crashgiants.io"
 pid_file: /data/homeserver.pid
 listeners:
   - port: 8008
@@ -19,10 +19,6 @@ listeners:
     resources:
       - names: [client, federation]
         compress: false
-database:
-  name: sqlite3
-  args:
-    database: /data/homeserver.db
 log_config: "/data/crashgiants.io.log.config"
 media_store_path: /data/media_store
 registration_shared_secret: "4T1qDkAxL;K3TcrH.gdci0Ks*HM@GrYdB&8-n6sSk3WJ+W^234"
@@ -32,9 +28,27 @@ form_secret: "kq&*o.iDiZ4Fx0GqFyOak+SKx8gqe-sgO@Y5L9u2t:+HPmqho&"
 signing_key_path: "/data/crashgiants.io.signing.key"
 trusted_key_servers:
   - server_name: "matrix.org"
-turn_uris: [ "turn:turn.crashgiants.io?transport=udp", "turn:turn.crashgiants.io?transport=tcp" ]
+turn_uris: [ "turn:crashgiants.io?transport=udp", "turn:crashgiants.io?transport=tcp" ]
 turn_shared_secret: "asecrettoeveryone"
 turn_user_lifetime: 86400000
 turn_allow_guests: True
+
+
+database:
+  name: "psycopg2"
+  args:
+    user: synapse
+    password: password
+    database: synapse
+    host: "postgres" #docker container host link
+    port: 5432
+    cp_min: 5
+    cp_max: 10
+
+# database:
+#   name: sqlite3
+#   args:
+#     database: /data/homeserver.db
+
 
 # vim:ft=yaml
