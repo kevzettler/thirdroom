@@ -301,7 +301,7 @@ export const SpawnablesModule = defineModule<GameState, SpawnablesModuleState>({
         addRemoteNodeComponent(ctx, container);
         Transform.position[container].set([
           6.4000000953674316,
-          0.9949825406074524,
+          0,
           3.7115917205810547
         ]);
         Transform.scale[container].set([1.5, 1.5, 1.5]);
@@ -321,7 +321,7 @@ export const SpawnablesModule = defineModule<GameState, SpawnablesModuleState>({
         addRemoteNodeComponent(ctx, container);
         Transform.position[container].set([
           3.4000000953674316,
-          0.9949825406074524,
+          0,
           1.7115917205810547
         ]);
         Transform.scale[container].set([1.5, 1.5, 1.5]);
@@ -348,7 +348,7 @@ export const SpawnablesModule = defineModule<GameState, SpawnablesModuleState>({
 
         const eid = createGLTFEntity(ctx, "/gltf/full-animation-rig.glb", { createTrimesh: false, isStatic: false });
         addChild(container, eid);
-
+        return eid;
       }
     });
 

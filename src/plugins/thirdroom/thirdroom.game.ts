@@ -30,7 +30,7 @@ import {
   GLTFViewerLoadGLTFMessage,
   ExitedWorldMessage,
   GLTFViewerLoadErrorMessage,
-  GLTFViewerLoadedMessage, f
+  GLTFViewerLoadedMessage,
 } from "./thirdroom.common";
 import { RemoteSceneComponent } from "../../engine/scene/scene.game";
 import { disposeGLTFResource, GLTFResource, inflateGLTFScene } from "../../engine/gltf/gltf.game";
