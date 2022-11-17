@@ -9,9 +9,9 @@ import { isMobileDevice } from "../utils/common";
 export function Logo() {
   return (
     <div className="inline-flex flex-column items-end gap-xxs">
-      <Text variant="b3" weight="medium" className="uppercase">
-        Crash Giants
-      </Text>
+      <a href="/">
+        <img src="/image/logo.png" alt="CrashGiants logo" width="150" height="50" />
+      </a>
     </div>
   );
 }
