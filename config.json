@@ -1,5 +1,5 @@
 {
-  "defaultHomeServer": "thirdroom.io",
-  "homeserverList": ["thirdroom.io", "matrix.org"],
+  "defaultHomeServer": "matrix.crashgiants.io",
+  "homeserverList": ["matrix.crashgiants.io", "thirdroom.io", "matrix.org"],
   "onboardingVersion": 1
 }

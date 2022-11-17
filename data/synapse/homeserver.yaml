@@ -32,7 +32,7 @@ turn_uris: [ "turn:crashgiants.io?transport=udp", "turn:crashgiants.io?transport
 turn_shared_secret: "asecrettoeveryone"
 turn_user_lifetime: 86400000
 turn_allow_guests: True
-
+max_upload_size: 100M
 
 database:
   name: "psycopg2"
