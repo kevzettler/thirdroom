@@ -10,7 +10,12 @@ export default function Site() {
     <div className="Site flex flex-column">
       <NavigationBar />
       <div className="grow">
-            <h1>Crashgiants</h1>
+        <img
+          width="100%"
+          height="100%"
+          src="/image/crashgiants4.png"
+          alt="Crashgiants giant robots smashing into eachother in suburban neighborhoods"
+        />
       </div>
     </div>
   );
