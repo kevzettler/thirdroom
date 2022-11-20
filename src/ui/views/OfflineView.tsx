@@ -1,34 +1,51 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useState, useRef, ReactNode } from "react";
 import { Outlet } from "react-router-dom";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 
 import "./session/SessionView.css";
-import { useInitMainThreadContext, MainThreadContextProvider } from "../hooks/useMainThread";
+import { useInitMainThreadContext, MainThreadContextProvider, useMainThreadContext } from "../hooks/useMainThread";
+import { useEvent } from "../hooks/useEvent";
+import { usePointerLockChange } from "../hooks/usePointerLockChange";
 import { LoadingScreen } from "./components/loading-screen/LoadingScreen";
 import { loadWorld, enterWorld } from "../../plugins/thirdroom/thirdroom.main";
 
+function InputWrapper() {
+  const [_isPointerLock, setIsPointerLock] = useState(false);
+  const mainThread = useMainThreadContext();
+  usePointerLockChange(mainThread.canvas, setIsPointerLock, []);
+
+  useEvent(
+    "click",
+    () => {
+      mainThread.canvas?.requestPointerLock();
+    },
+    mainThread.canvas,
+    []
+  );
+
+  return null;
+}
 
 export default function OfflineView() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mainThread = useInitMainThreadContext(canvasRef);
 
   async function initWorld() {
-    if (mainThread) {
-      await loadWorld(
-        mainThread,
-        "/TerraHomeworld2.glb",
-        ""
-      )
-      enterWorld(mainThread);
-    } else {
-      console.error("missing main thread");
-    }
+    if (!mainThread) return null;
+    await loadWorld(
+      mainThread,
+      "/TerraHomeworld2.glb",
+      ""
+    )
+    enterWorld(mainThread);
+    mainThread.canvas?.requestPointerLock();
   }
 
   useEffect(() => {
     initWorld();
-  });
+  }, [mainThread]);
+
 
   return (
     <DndProvider backend={HTML5Backend}>
@@ -37,6 +54,7 @@ export default function OfflineView() {
         {mainThread ? (
           <MainThreadContextProvider value={mainThread}>
             <Outlet />
+            <InputWrapper />
             {/* <StatusBar /> */}
           </MainThreadContextProvider>
         ) : (
