@@ -53,6 +53,7 @@ const LoginView = lazy(() => import("./views/login/LoginView"));
 const GLTFViewer = lazy(() => import("./views/gltf-viewer/GLTFViewer"));
 const AssetPipeline = lazy(() => import("./views/asset-pipeline/AssetPipeline"));
 const SessionView = lazy(() => import("./views/session/SessionView"));
+const OfflineView = lazy(() => import("./views/OfflineView"));
 const WorldRootView = lazy(() => import("./views/session/world/WorldRootView"));
 
 export function App() {
@@ -60,6 +61,14 @@ export function App() {
     <>
       <FocusOutlineManager />
       <SentryRoutes>
+        <Route
+          path="/offline"
+          element={
+            <Suspense fallback={<SplashScreen />}>
+              <OfflineView />
+            </Suspense>
+          }
+        />
         <Route element={<HydrogenRootView />}>
           <Route
             path="/preview"

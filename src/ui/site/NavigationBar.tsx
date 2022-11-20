@@ -2,7 +2,6 @@ import { useNavigate } from "react-router-dom";
 
 import { Button } from "../atoms/button/Button";
 import { Text } from "../atoms/text/Text";
-import LogoFullSVG from "../../../res/svg/logo-full.svg";
 import "./NavigationBar.css";
 import { isMobileDevice } from "../utils/common";
 
@@ -25,7 +24,12 @@ export function NavigationBar() {
         <Logo />
       </div>
       <div className="flex items-center gap-lg">
-        <a href="https://matrix.to/#/#thirdroom-dev:matrix.org" target="_blank">
+        <a href="/offline">
+          <Text variant="b2" weight="medium">
+            Single Player
+          </Text>
+        </a>
+        <a href="https://matrix.to/#/#general:matrix.crashgiants.io" target="_blank">
           <Text variant="b2" weight="medium">
             Chat
           </Text>
