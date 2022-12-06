@@ -31,12 +31,14 @@ import {
   PrimitiveMaterial,
   RendererMaterialResource,
 } from "../material/material.render";
+import { MatrixMaterial } from "../material/MatrixMaterial";
 import { getModule } from "../module/module.common";
 import { RendererNodeTripleBuffer } from "../node/node.common";
 import { LocalNode, setTransformFromNode, updateTransformFromNode } from "../node/node.render";
 import { RendererModule, RenderThreadState } from "../renderer/renderer.render";
 import { ResourceId } from "../resource/resource.common";
 import { getLocalResource, getResourceDisposed, waitForLocalResource } from "../resource/resource.render";
+import { MeshPrimitiveMode } from "../resource/schema";
 import { LocalSceneResource } from "../scene/scene.render";
 import { RendererTextureResource } from "../texture/texture.render";
 import { promiseObject } from "../utils/promiseObject";
@@ -44,7 +46,6 @@ import { toTrianglesDrawMode } from "../utils/toTrianglesDrawMode";
 import {
   InstancedMeshAttribute,
   MeshPrimitiveAttribute,
-  MeshPrimitiveMode,
   MeshPrimitiveTripleBuffer,
   SharedInstancedMeshResource,
   SharedLightMapResource,
@@ -435,6 +436,12 @@ function createMeshPrimitiveObject(
     mesh.onBeforeRender = (renderer, scene, camera, geometry, material) => {
       const meshMaterial = material as MeshStandardMaterial;
 
+      const matrixMaterial = meshMaterial as unknown as MatrixMaterial;
+
+      if (matrixMaterial.isMatrixMaterial) {
+        matrixMaterial.update(ctx.elapsed / 1000, mesh);
+      }
+
       if (!meshMaterial.isMeshStandardMaterial) {
         return;
       }
@@ -534,7 +541,6 @@ export function updateLocalMeshPrimitiveResources(ctx: RenderThreadState, meshPr
       : getDefaultMaterialForMeshPrimitive(ctx, meshPrimitive.mode, meshPrimitive.attributes);
 
     if (newMaterialObj !== meshPrimitive.materialObj) {
-      console.log("material changed");
       if (meshPrimitive.materialObj) {
         if (meshPrimitive.material) {
           meshPrimitive.material.disposeMeshPrimitiveMaterial(meshPrimitive.materialObj);

@@ -1,5 +1,5 @@
-#include <stdlib.h>
 #include "websg.h"
+#include <stdlib.h>
 
 export void *websg_allocate(int size) {
   return malloc(size);

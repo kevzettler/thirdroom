@@ -10,19 +10,27 @@ import {
   MeshPhysicalMaterial,
   MeshStandardMaterial,
   PointsMaterial,
+  Texture,
   Uniform,
   Vector3,
 } from "three";
 
-import { MeshPrimitiveAttribute, MeshPrimitiveMode } from "../mesh/mesh.common";
+import { MeshPrimitiveAttribute } from "../mesh/mesh.common";
 import { LocalMeshPrimitiveAttributes } from "../mesh/mesh.render";
 import { getModule } from "../module/module.common";
 import { RendererModule, RenderThreadState } from "../renderer/renderer.render";
 import { defineLocalResourceClass } from "../resource/LocalResourceClass";
 import { getLocalResources } from "../resource/resource.render";
-import { LocalMaterial, MaterialAlphaMode, MaterialResource, MaterialType } from "../resource/schema";
+import {
+  LocalMaterial,
+  MaterialAlphaMode,
+  MaterialResource,
+  MaterialType,
+  MeshPrimitiveMode,
+} from "../resource/schema";
 import { RendererTextureResource } from "../texture/texture.render";
 import { removeUndefinedProperties } from "../utils/removeUndefinedProperties";
+import { MatrixMaterial } from "./MatrixMaterial";
 
 export type PrimitiveUnlitMaterial = MeshBasicMaterial | LineBasicMaterial | PointsMaterial;
 export type PrimitiveStandardMaterial =
@@ -30,7 +38,7 @@ export type PrimitiveStandardMaterial =
   | MeshPhysicalMaterial
   | LineBasicMaterial
   | PointsMaterial;
-export type PrimitiveMaterial = PrimitiveStandardMaterial | PrimitiveUnlitMaterial;
+export type PrimitiveMaterial = PrimitiveStandardMaterial | PrimitiveUnlitMaterial | MatrixMaterial;
 
 interface MaterialCacheEntry {
   mode: MeshPrimitiveMode;
@@ -258,6 +266,8 @@ export class RendererMaterialResource extends defineLocalResourceClass<typeof Ma
       throw new Error(`Unsupported material type ${this.type}`);
     }
 
+    material.name = this.name;
+
     this.materialCache.push({
       material,
       flatShading,
@@ -327,6 +337,22 @@ function patchMaterial(ctx: RenderThreadState, material: PrimitiveMaterial) {
   }
 }
 
+type TextureKeys<Mat extends PrimitiveMaterial> = {
+  [Key in keyof Mat]: Mat[Key] extends Texture | null ? Key : never;
+}[keyof Mat];
+
+function updateMaterialTexture<Mat extends PrimitiveMaterial>(
+  material: Mat,
+  key: TextureKeys<Mat>,
+  value: RendererTextureResource | undefined
+) {
+  if (!!material[key] !== !!value) {
+    material.needsUpdate = true;
+  }
+
+  (material[key] as Texture | null) = value?.texture || null;
+}
+
 export function UpdateRendererMaterialSystem(ctx: RenderThreadState) {
   const localMaterials = getLocalResources(ctx, RendererMaterialResource);
 
@@ -336,7 +362,11 @@ export function UpdateRendererMaterialSystem(ctx: RenderThreadState) {
 
     for (let j = 0; j < materialCache.length; j++) {
       const { useDerivativeTangents, material } = materialCache[j];
-      material.color.fromArray(localMaterial.baseColorFactor);
+
+      if (!("isMatrixMaterial" in material)) {
+        material.color.fromArray(localMaterial.baseColorFactor);
+      }
+
       material.opacity = localMaterial.baseColorFactor[3];
       material.side = localMaterial.doubleSided ? DoubleSide : FrontSide;
       material.transparent = localMaterial.alphaMode === MaterialAlphaMode.BLEND;
@@ -344,35 +374,36 @@ export function UpdateRendererMaterialSystem(ctx: RenderThreadState) {
       material.alphaTest = localMaterial.alphaMode === MaterialAlphaMode.MASK ? localMaterial.alphaCutoff : 0;
 
       if ("map" in material) {
-        material.map = localMaterial.baseColorTexture?.texture || null;
+        updateMaterialTexture(material, "map", localMaterial.baseColorTexture);
       }
 
       if ("isMeshStandardMaterial" in material) {
         material.metalness = localMaterial.metallicFactor; // 🤘
-        material.metalnessMap = localMaterial.metallicRoughnessTexture?.texture || null;
+        updateMaterialTexture(material, "metalnessMap", localMaterial.metallicRoughnessTexture);
         material.roughness = localMaterial.roughnessFactor;
-        material.roughnessMap = localMaterial.metallicRoughnessTexture?.texture || null;
+        updateMaterialTexture(material, "roughnessMap", localMaterial.metallicRoughnessTexture);
         material.normalScale.set(
           localMaterial.normalTextureScale,
           useDerivativeTangents ? -localMaterial.normalTextureScale : localMaterial.normalTextureScale
         );
-        material.normalMap = localMaterial.normalTexture?.texture || null;
+        updateMaterialTexture(material, "normalMap", localMaterial.normalTexture);
         material.aoMapIntensity = localMaterial.occlusionTextureStrength;
-        material.aoMap = localMaterial.occlusionTexture?.texture || null;
+        updateMaterialTexture(material, "aoMap", localMaterial.occlusionTexture);
         material.emissive.fromArray(localMaterial.emissiveFactor);
         material.emissiveIntensity = localMaterial.emissiveStrength;
-        material.emissiveMap = localMaterial.emissiveTexture?.texture || null;
+        updateMaterialTexture(material, "emissiveMap", localMaterial.emissiveTexture);
       }
 
       if ("isMeshPhysicalMaterial" in material) {
+        // TODO: add isMeshPhysicalMaterial to MeshPhysicalMaterial types
         const physicalMaterial = material as MeshPhysicalMaterial;
         physicalMaterial.ior = localMaterial.ior;
         physicalMaterial.thickness = localMaterial.thicknessFactor;
         physicalMaterial.attenuationDistance = localMaterial.attenuationDistance;
         physicalMaterial.attenuationColor.fromArray(localMaterial.attenuationColor);
         physicalMaterial.transmission = localMaterial.transmissionFactor;
-        physicalMaterial.transmissionMap = localMaterial.transmissionTexture?.texture || null;
-        physicalMaterial.thicknessMap = localMaterial.thicknessTexture?.texture || null;
+        updateMaterialTexture(physicalMaterial, "transmissionMap", localMaterial.transmissionTexture);
+        updateMaterialTexture(physicalMaterial, "thicknessMap", localMaterial.thicknessTexture);
       }
     }
   }
