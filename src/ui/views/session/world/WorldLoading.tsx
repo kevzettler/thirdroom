@@ -11,7 +11,7 @@ import { useMainThreadContext } from "../../../hooks/useMainThread";
 import { bytesToSize, getPercentage } from "../../../utils/common";
 import "./WorldLoading.css";
 import { useHydrogen } from "../../../hooks/useHydrogen";
-import { loadWorld } from "../../../../plugins/thirdroom/thirdroom.main";
+import { loadWorld } from "../../../../plugins/crashgiants/thirdroom.main";
 import { SetObjectCapMessage, SetObjectCapMessageType } from "../../../../plugins/spawnables/spawnables.common";
 import { useIsMounted } from "../../../hooks/useIsMounted";
 import { createMatrixNetworkInterface } from "../../../../engine/network/createMatrixNetworkInterface";

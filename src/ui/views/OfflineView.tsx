@@ -9,7 +9,7 @@ import { useEvent } from "../hooks/useEvent";
 import { useKeyDown } from "../hooks/useKeyDown";
 import { usePointerLockChange } from "../hooks/usePointerLockChange";
 import { LoadingScreen } from "./components/loading-screen/LoadingScreen";
-import { loadWorld, enterWorld } from "../../plugins/thirdroom/thirdroom.main";
+import { loadWorld, enterWorld } from "../../plugins/crashgiants/thirdroom.main";
 
 function OfflineContent() {
   const [_isPointerLock, setIsPointerLock] = useState(false);

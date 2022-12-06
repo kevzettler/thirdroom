@@ -1,6 +1,6 @@
 import { InitializeRenderWorkerMessage, WorkerMessageType } from "./WorkerMessage";
 import { Message, registerModules, Thread } from "./module/module.common";
-import renderConfig from "./config.render";
+import renderConfig from "./crashgiants.config.render";
 import { RenderThreadState, startRenderLoop } from "./renderer/renderer.render";
 import { MockMessageChannel, MockWorkerMessageChannel, MockMessagePort } from "./module/MockMessageChannel";
 

@@ -37,7 +37,7 @@ import { deserializeCommand } from "./commands.game";
 import { InputModule } from "../input/input.game";
 import { PhysicsModule } from "../physics/physics.game";
 import { waitUntil } from "../utils/waitUntil";
-import { ExitWorldMessage, ThirdRoomMessageType } from "../../plugins/thirdroom/thirdroom.common";
+import { ExitWorldMessage, ThirdRoomMessageType } from "../../plugins/crashgiants/thirdroom.common";
 
 /*********
  * Types *

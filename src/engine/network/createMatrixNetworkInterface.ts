@@ -1,6 +1,6 @@
 import { Client, GroupCall, Member, PowerLevels, SubscriptionHandle } from "@thirdroom/hydrogen-view-sdk";
 
-import { enterWorld, exitWorld } from "../../plugins/thirdroom/thirdroom.main";
+import { enterWorld, exitWorld } from "../../plugins/crashgiants/thirdroom.main";
 import { IMainThreadContext } from "../MainThread";
 import { addPeer, disconnect, hasPeer, removePeer, setHost, setPeerId } from "./network.main";
 

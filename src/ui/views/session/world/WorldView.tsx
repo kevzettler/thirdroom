@@ -49,7 +49,7 @@ import {
   InteractionMessage,
   InteractionMessageType,
 } from "../../../../plugins/interaction/interaction.common";
-import { ExitedWorldMessage, ThirdRoomMessageType } from "../../../../plugins/thirdroom/thirdroom.common";
+import { ExitedWorldMessage, ThirdRoomMessageType } from "../../../../plugins/crashgiants/thirdroom.common";
 import { createDisposables } from "../../../../engine/utils/createDisposables";
 import { aliasToRoomId, parsedMatrixUriToString, parseMatrixUri } from "../../../utils/matrixUtils";
 import { Hotbar, HotbarSlot } from "../../components/hotbar/Hotbar";

@@ -8,7 +8,7 @@ import {
   GLTFViewerLoadedMessage,
   GLTFViewerLoadErrorMessage,
   ThirdRoomMessageType,
-} from "../../../plugins/thirdroom/thirdroom.common";
+} from "../../../plugins/crashgiants/thirdroom.common";
 import { useKeyDown } from "../../hooks/useKeyDown";
 import { MainThreadContextProvider, useInitMainThreadContext, useMainThreadContext } from "../../hooks/useMainThread";
 import { EditorView } from "../session/editor/EditorView";

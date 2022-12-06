@@ -1,7 +1,7 @@
 import GameWorker from "./GameWorker?worker";
 import { WorkerMessageType, InitializeGameWorkerMessage, InitializeRenderWorkerMessage } from "./WorkerMessage";
 import { BaseThreadContext, Message, registerModules, Thread } from "./module/module.common";
-import mainThreadConfig from "./config.main";
+import mainThreadConfig from "./crashgiants.config.main";
 import { swapReadBufferFlags, swapWriteBufferFlags } from "./allocator/TripleBuffer";
 import { MockMessagePort } from "./module/MockMessageChannel";
 

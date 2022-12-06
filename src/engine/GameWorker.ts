@@ -4,7 +4,7 @@ import { addChild, addTransformComponent, SkipRenderLerpSystem } from "./compone
 import { maxEntities, tickRate } from "./config.common";
 import { InitializeGameWorkerMessage, WorkerMessageType } from "./WorkerMessage";
 import { Message, registerModules, Thread } from "./module/module.common";
-import gameConfig from "./config.game";
+import gameConfig from "./crashgiants.config.game";
 import { GameState, World } from "./GameTypes";
 import { swapReadBufferFlags, swapWriteBufferFlags } from "./allocator/TripleBuffer";
 import { GameResourceManager } from "./resource/GameResourceManager";
