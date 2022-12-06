@@ -115,30 +115,30 @@ const addAvatarController = (ctx: GameState, input: GameInputModule, eid: number
 
 const createAvatarRig =
   (input: GameInputModule, physics: PhysicsModuleState, network: GameNetworkState) =>
-    (ctx: GameState, remote = false) => {
-      const spawnPoints = spawnPointQuery(ctx.world);
+  (ctx: GameState, remote = false) => {
+    const spawnPoints = spawnPointQuery(ctx.world);
 
-      const eid = addEntity(ctx.world);
-      addTransformComponent(ctx.world, eid);
-      addAvatarCamera(ctx, eid);
-      addAvatarController(ctx, input, eid);
+    const eid = addEntity(ctx.world);
+    addTransformComponent(ctx.world, eid);
+    addAvatarCamera(ctx, eid);
+    addAvatarController(ctx, input, eid);
 
-      const characterControllerType = SceneCharacterControllerComponent.get(ctx.activeScene)?.type;
-      if (characterControllerType === CharacterControllerType.Fly || spawnPoints.length === 0) {
-        addFlyControls(ctx, eid);
-      } else {
-        addPhysicsControls(ctx, eid);
-      }
+    const characterControllerType = SceneCharacterControllerComponent.get(ctx.activeScene)?.type;
+    if (characterControllerType === CharacterControllerType.Fly || spawnPoints.length === 0) {
+      addFlyControls(ctx, eid);
+    } else {
+      addPhysicsControls(ctx, eid);
+    }
 
-      addAvatar(ctx, physics, "/gltf/full-animation-rig.glb", eid, {
-        nametag: true,
-      });
+    addAvatar(ctx, physics, "/gltf/full-animation-rig.glb", eid, {
+      nametag: true,
+    });
 
-      addAvatarRigidBody(ctx, physics, eid);
-      addInteractableComponent(ctx, physics, eid, InteractableType.Player);
+    addAvatarRigidBody(ctx, physics, eid);
+    addInteractableComponent(ctx, physics, eid, InteractableType.Player);
 
-      return eid;
-    };
+    return eid;
+  };
 
 export const ThirdRoomModule = defineModule<GameState, ThirdRoomModuleState>({
   name: "thirdroom",
@@ -266,9 +266,6 @@ async function onEnterWorld(ctx: GameState, message: EnterWorldMessage) {
   const input = getModule(ctx, InputModule);
 
   loadPlayerRig(ctx, physics, input, network);
-  const grunt = createPrefabEntity(ctx, 'grunt');
-  addChild(ctx.activeScene, grunt);
-  addChild(ctx.activeScene, createPrefabEntity(ctx, 'mecha'));
 }
 
 function onExitWorld(ctx: GameState, message: ExitWorldMessage) {
