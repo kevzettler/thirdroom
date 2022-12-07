@@ -35,6 +35,7 @@ import { GameResourceSystem } from "./resource/GameResourceSystem";
 import { RemoteCameraSystem } from "./camera/camera.game";
 import { InboundNetworkSystem } from "./network/inbound.game";
 import { OutboundNetworkSystem } from "./network/outbound.game";
+import { GruntAnimationSystem } from "./animation/grunt-animation.game";
 
 export default defineConfig<GameState>({
   modules: [
@@ -68,7 +69,10 @@ export default defineConfig<GameState>({
     PhysicsCharacterControllerSystem,
     FlyControllerSystem,
     PhysicsSystem,
-    AnimationSystem,
+    //AnimationSystem,
+
+    //'Generic' animation system
+    GruntAnimationSystem,
     InteractionSystem,
     SpawnableSystem,
     ThirdroomSystem,
