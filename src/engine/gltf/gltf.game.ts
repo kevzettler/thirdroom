@@ -1,6 +1,7 @@
 import { addComponent, addEntity } from "bitecs";
 import { mat4, vec2 } from "gl-matrix";
 import { AnimationMixer, Bone, Group, Object3D, SkinnedMesh } from "three";
+import { addGlobalEventProcessor } from "@sentry/react";
 
 import { createRemoteAccessor, RemoteAccessor } from "../accessor/accessor.game";
 import { RemoteAudioData, RemoteAudioEmitter, RemoteAudioSource } from "../audio/audio.game";
@@ -35,7 +36,8 @@ import { hasCharacterControllerExtension, inflateSceneCharacterController } from
 import { hasSpawnPointExtension } from "./MX_spawn_point";
 import { addTilesRenderer, hasTilesRendererExtension } from "./MX_tiles_renderer";
 import { RemoteNode } from "../node/node.game";
-import { addAnimationComponent, BoneComponent } from "../animation/animation.game";
+//import { addAnimationComponent, BoneComponent } from "../animation/animation.game";
+import { addGruntAnimationComponent, BoneComponent } from "../animation/grunt-animation.game";
 import { loadGLTFAnimationClip } from "./animation.three";
 import {
   addCollider,
@@ -234,7 +236,8 @@ export async function inflateGLTFScene(
       resource.root.animations.map((a, i) => loadGLTFAnimationClip(ctx, resource, a, i, indexToObject3D))
     );
     const actions = clips.map((clip) => mixer.clipAction(clip));
-    addAnimationComponent(ctx.world, sceneEid, { mixer, clips, actions });
+    addGruntAnimationComponent(ctx.world, sceneEid, { mixer, clips, actions });
+    //    addAnimationComponent(ctx.world, sceneEid, { mixer, clips, actions });
   }
 
   const bloomStrength = getPostprocessingBloomStrength(scene);
@@ -947,8 +950,8 @@ async function _loadGLTFMaterial(resource: GLTFResource, index: number): Promise
       baseColorTexture:
         pbrMetallicRoughness?.baseColorTexture?.index !== undefined
           ? loadGLTFTexture(resource, pbrMetallicRoughness.baseColorTexture.index, {
-              encoding: TextureEncoding.sRGB,
-            })
+            encoding: TextureEncoding.sRGB,
+          })
           : undefined,
     });
 
@@ -977,8 +980,8 @@ async function _loadGLTFMaterial(resource: GLTFResource, index: number): Promise
       baseColorTexture:
         pbrMetallicRoughness?.baseColorTexture?.index !== undefined
           ? loadGLTFTexture(resource, pbrMetallicRoughness?.baseColorTexture?.index, {
-              encoding: TextureEncoding.sRGB,
-            })
+            encoding: TextureEncoding.sRGB,
+          })
           : undefined,
       metallicRoughnessTexture:
         pbrMetallicRoughness?.metallicRoughnessTexture?.index !== undefined
@@ -1090,17 +1093,17 @@ async function _loadGLTFAccessor(ctx: GameState, resource: GLTFResource, index: 
     max: accessor.max,
     sparse: accessor.sparse
       ? {
-          count: accessor.sparse.count,
-          indices: {
-            byteOffset: accessor.sparse.indices.byteOffset,
-            componentType: accessor.sparse.indices.componentType,
-            bufferView: sparseIndicesBufferView!,
-          },
-          values: {
-            byteOffset: accessor.sparse.values.byteOffset,
-            bufferView: sparseValuesBufferView!,
-          },
-        }
+        count: accessor.sparse.count,
+        indices: {
+          byteOffset: accessor.sparse.indices.byteOffset,
+          componentType: accessor.sparse.indices.componentType,
+          bufferView: sparseIndicesBufferView!,
+        },
+        values: {
+          byteOffset: accessor.sparse.values.byteOffset,
+          bufferView: sparseValuesBufferView!,
+        },
+      }
       : undefined,
   });
 
