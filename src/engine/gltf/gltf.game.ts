@@ -37,7 +37,7 @@ import { hasSpawnPointExtension } from "./MX_spawn_point";
 import { addTilesRenderer, hasTilesRendererExtension } from "./MX_tiles_renderer";
 import { RemoteNode } from "../node/node.game";
 //import { addAnimationComponent, BoneComponent } from "../animation/animation.game";
-import { addGruntAnimationComponent, BoneComponent } from "../animation/grunt-animation.game";
+import { addGenericAnimationComponent, BoneComponent } from "../animation/genericAnimation.game";
 import { loadGLTFAnimationClip } from "./animation.three";
 import {
   addCollider,
@@ -236,7 +236,7 @@ export async function inflateGLTFScene(
       resource.root.animations.map((a, i) => loadGLTFAnimationClip(ctx, resource, a, i, indexToObject3D))
     );
     const actions = clips.map((clip) => mixer.clipAction(clip));
-    addGruntAnimationComponent(ctx.world, sceneEid, { mixer, clips, actions });
+    addGenericAnimationComponent(ctx.world, sceneEid, { mixer, clips, actions });
     //    addAnimationComponent(ctx.world, sceneEid, { mixer, clips, actions });
   }
 
