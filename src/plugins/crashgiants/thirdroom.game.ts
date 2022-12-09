@@ -1,4 +1,4 @@
-import { addComponent, addEntity, defineQuery, hasComponent, removeComponent } from "bitecs";
+import { addComponent, addEntity, defineQuery, hasComponent, removeComponent, getEntityComponents } from "bitecs";
 import { vec3 } from "gl-matrix";
 import RAPIER from "@dimforge/rapier3d-compat";
 
@@ -90,6 +90,7 @@ import * as Schema from "../../engine/resource/schema";
 import { ResourceDefinition } from "../../engine/resource/ResourceDefinition";
 import { addAvatarRigidBody } from "../avatars/addAvatarRigidBody";
 import { createGLTFEntity } from "../../engine/gltf/gltf.game";
+import { animationQuery, GenericAnimationComponent } from "../../engine/animation/genericAnimation.game"
 
 interface ThirdRoomModuleState {
   sceneGLTF?: GLTFResource;
@@ -312,6 +313,8 @@ async function onEnterWorld(ctx: GameState, message: EnterWorldMessage) {
   // Crashgiants setup
   const grunt = createPrefabEntity(ctx, 'grunt');
   addChild(ctx.activeScene, grunt);
+  const ents = animationQuery(ctx.world);
+  //  gruntAnimations.actions[4];
   addChild(ctx.activeScene, createPrefabEntity(ctx, 'mecha'));
 }
 
