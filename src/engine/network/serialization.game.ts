@@ -519,13 +519,13 @@ export function embodyAvatar(ctx: GameState, physics: PhysicsModuleState, input:
   try {
     const nametag = getNametag(ctx, eid);
     removeComponent(ctx.world, NametagComponent, nametag);
-  } catch {}
+  } catch { }
 
   // hide our avatar
-  try {
-    const avatar = getAvatar(ctx, eid);
-    addComponent(ctx.world, Hidden, avatar);
-  } catch {}
+  // try {
+  //   const avatar = getAvatar(ctx, eid);
+  //   addComponent(ctx.world, Hidden, avatar);
+  // } catch {}
 
   // mark entity as our player entity
   addComponent(ctx.world, OurPlayer, eid);
