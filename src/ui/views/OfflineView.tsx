@@ -1,5 +1,4 @@
-import { useEffect, useState, useRef, ReactNode } from "react";
-import { Outlet } from "react-router-dom";
+import { useEffect, useState, useRef } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 
@@ -55,7 +54,7 @@ function OfflineContent() {
 
   useEffect(() => {
     initWorld();
-  }, [mainThread]);
+  }, [mainThread, initWorld]);
 
 
   return null;
