@@ -36,7 +36,7 @@ import { RemoteSceneComponent } from "../../engine/scene/scene.game";
 import { disposeGLTFResource, GLTFResource, inflateGLTFScene } from "../../engine/gltf/gltf.game";
 import { NOOP } from "../../engine/config.common";
 import { addRemoteNodeComponent } from "../../engine/node/node.game";
-import { createCamera, createRemotePerspectiveCamera } from "../../engine/camera/camera.game";
+import { createCamera } from "../../engine/camera/camera.game";
 import { createPrefabEntity, registerPrefab } from "../../engine/prefab/prefab.game";
 import { CharacterControllerType, SceneCharacterControllerComponent } from "../../engine/gltf/MX_character_controller";
 import { addFlyControls, FlyControls } from "../FlyCharacterController";
@@ -69,7 +69,7 @@ import {
   InputController,
   inputControllerQuery,
 } from "../../engine/input/InputController";
-import { addCameraPitchTargetComponent, addCameraYawTargetComponent } from "../FirstPersonCamera";
+import { addCameraPitchTargetComponent, addCameraYawTargetComponent } from "../ThirdPersonCamera";
 import { addInteractableComponent, removeInteractableComponent } from "../interaction/interaction.game";
 import { embodyAvatar } from "../../engine/network/serialization.game";
 import {
@@ -99,10 +99,12 @@ interface ThirdRoomModuleState {
 
 const addAvatarCamera = (ctx: GameState, eid: number) => {
   const camera = createCamera(ctx);
-  Transform.position[camera][1] = 1.2;
+  Transform.position[camera][0] = 3;
+  Transform.position[camera][1] = 8;
+  Transform.position[camera][2] = 10;
   addChild(eid, camera);
   addCameraYawTargetComponent(ctx.world, eid);
-  addCameraPitchTargetComponent(ctx.world, camera);
+  //  addCameraPitchTargetComponent(ctx.world, camera);
   return camera;
 };
 
@@ -271,7 +273,7 @@ async function onLoadWorld(ctx: GameState, message: LoadWorldMessage) {
   try {
     await loadEnvironment(ctx, message.url, message.scriptUrl);
 
-    loadPreviewCamera(ctx);
+    //    loadPreviewCamera(ctx);
 
     await waitForCurrentSceneToRender(ctx);
 
@@ -482,32 +484,32 @@ async function loadEnvironment(ctx: GameState, url: string, scriptUrl?: string, 
 
 export const spawnPointQuery = defineQuery([SpawnPoint]);
 
-function loadPreviewCamera(ctx: GameState) {
-  const spawnPoints = spawnPointQuery(ctx.world);
-
-  let defaultCamera = NOOP;
-
-  if (!ctx.activeCamera) {
-    defaultCamera = addEntity(ctx.world);
-
-    addTransformComponent(ctx.world, defaultCamera);
-
-    addChild(ctx.activeScene, defaultCamera);
-
-    addRemoteNodeComponent(ctx, defaultCamera, {
-      camera: createRemotePerspectiveCamera(ctx),
-    });
-
-    ctx.activeCamera = defaultCamera;
-  }
-
-  if (ctx.activeCamera === defaultCamera && spawnPoints.length > 0) {
-    vec3.copy(Transform.position[defaultCamera], Transform.position[spawnPoints[0]]);
-    Transform.position[defaultCamera][1] += 1.6;
-    vec3.copy(Transform.quaternion[defaultCamera], Transform.quaternion[spawnPoints[0]]);
-    setEulerFromQuaternion(Transform.rotation[defaultCamera], Transform.quaternion[defaultCamera]);
-  }
-}
+// function loadPreviewCamera(ctx: GameState) {
+//   const spawnPoints = spawnPointQuery(ctx.world);
+//
+//   let defaultCamera = NOOP;
+//
+//   if (!ctx.activeCamera) {
+//     defaultCamera = addEntity(ctx.world);
+//
+//     addTransformComponent(ctx.world, defaultCamera);
+//
+//     addChild(ctx.activeScene, defaultCamera);
+//
+//     addRemoteNodeComponent(ctx, defaultCamera, {
+//       camera: createRemotePerspectiveCamera(ctx),
+//     });
+//
+//     ctx.activeCamera = defaultCamera;
+//   }
+//
+//   if (ctx.activeCamera === defaultCamera && spawnPoints.length > 0) {
+//     vec3.copy(Transform.position[defaultCamera], Transform.position[spawnPoints[0]]);
+//     Transform.position[defaultCamera][1] += 1.6;
+//     vec3.copy(Transform.quaternion[defaultCamera], Transform.quaternion[spawnPoints[0]]);
+//     setEulerFromQuaternion(Transform.rotation[defaultCamera], Transform.quaternion[defaultCamera]);
+//   }
+// }
 
 function loadPlayerRig(ctx: GameState, physics: PhysicsModuleState, input: GameInputModule, network: GameNetworkState) {
   if (ctx.activeCamera) {
@@ -530,10 +532,15 @@ function loadPlayerRig(ctx: GameState, physics: PhysicsModuleState, input: GameI
 
   addChild(ctx.activeScene, eid);
 
-  const spawnPoints = spawnPointQuery(ctx.world);
-  if (spawnPoints.length > 0) {
-    spawnEntity(ctx, spawnPoints, eid);
-  }
+  // const spawnPoints = spawnPointQuery(ctx.world);
+  // if (spawnPoints.length > 0) {
+  //   //spawnEntity(ctx, spawnPoints, eid);
+
+  //   // (3) [1162, 1163, 1164, sort: ƒ]
+  //
+  // hard code a spawn point for debuggin
+  spawnEntity(ctx, [1164], eid);
+  //}
 
   return eid;
 }

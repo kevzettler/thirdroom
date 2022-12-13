@@ -4,7 +4,7 @@ import { ApplyInputSystem, InputModule, ResetInputSystem } from "./input/input.g
 import { PhysicsModule, PhysicsSystem } from "./physics/physics.game";
 import { NetworkModule } from "./network/network.game";
 import { ActionMappingSystem } from "./input/ActionMappingSystem";
-import { FirstPersonCameraModule, FirstPersonCameraSystem } from "../plugins/FirstPersonCamera";
+import { ThirdPersonCameraModule, ThirdPersonCameraSystem } from "../plugins/ThirdPersonCamera";
 import {
   PhysicsCharacterControllerModule,
   PhysicsCharacterControllerSystem,
@@ -49,7 +49,7 @@ export default defineConfig<GameState>({
     EditorModule,
     RendererModule,
     ThirdRoomModule,
-    FirstPersonCameraModule,
+    ThirdPersonCameraModule,
     PhysicsCharacterControllerModule,
     FlyCharacterControllerModule,
     InteractionModule,
@@ -65,7 +65,7 @@ export default defineConfig<GameState>({
 
     NetworkInterpolationSystem,
 
-    FirstPersonCameraSystem,
+    ThirdPersonCameraSystem,
     PhysicsCharacterControllerSystem,
     FlyControllerSystem,
     PhysicsSystem,
