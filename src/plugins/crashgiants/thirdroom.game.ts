@@ -132,7 +132,7 @@ const createAvatarRig =
         addPhysicsControls(ctx, eid);
       }
 
-      addAvatar(ctx, physics, "/gltf/full-animation-rig.glb", eid, {
+      addAvatar(ctx, physics, '/gltf/mecha.glb', eid, {
         nametag: true,
       });
 
