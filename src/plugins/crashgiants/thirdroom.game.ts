@@ -88,8 +88,8 @@ import * as Schema from "../../engine/resource/schema";
 import { ResourceDefinition } from "../../engine/resource/ResourceDefinition";
 import { addAvatarRigidBody } from "../avatars/addAvatarRigidBody";
 import { createGLTFEntity } from "../../engine/gltf/gltf.game";
-import { animationQuery } from "../../engine/animation/genericAnimation.game"
-
+import { GenericAnimationComponent } from "../../engine/animation/genericAnimation.game";
+import { MechAnimationComponent } from "../../engine/animation/mechAnimation.game";
 interface ThirdRoomModuleState {
   sceneGLTF?: GLTFResource;
   collisionsGLTF?: GLTFResource;
@@ -134,6 +134,7 @@ const createAvatarRig =
 
       addAvatar(ctx, physics, '/gltf/mecha.glb', eid, {
         nametag: true,
+        animationController: MechAnimationComponent
       });
 
       addAvatarRigidBody(ctx, physics, eid);

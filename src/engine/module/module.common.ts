@@ -306,7 +306,7 @@ function registerQueuedMessageHandler<ThreadContext extends BaseThreadContext, M
       const timeoutId = self.setTimeout(() => {
         reject(
           new Error(
-            `timeout reached while waiting on message ${key} from thread ${fromThread} on thread ${localThread}`
+            `timeout reached while waiting on message: ${key} from thread: ${fromThread} on thread: ${localThread}`
           )
         );
       }, 5000);

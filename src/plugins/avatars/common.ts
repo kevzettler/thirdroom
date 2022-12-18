@@ -1,9 +1,12 @@
+import { IAnimationControllerComponent } from "../../engine/animation/genericAnimation.game";
+
 export interface AvatarOptions {
   radius?: number;
   height?: number;
   kinematic?: boolean;
   nametag?: boolean;
   collisionGroup?: number;
+  animationController?: IAnimationControllerComponent;
 }
 
 export const AVATAR_HEIGHT = 1;

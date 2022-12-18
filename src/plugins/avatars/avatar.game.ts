@@ -29,11 +29,11 @@ export function addAvatar(
   container: number,
   options: AvatarOptions = {}
 ) {
-  const { height = AVATAR_HEIGHT, nametag = false } = options;
+  const { height = AVATAR_HEIGHT, nametag = false, animationController } = options;
 
   if (nametag) addNametag(ctx, height, container);
 
-  const eid = createGLTFEntity(ctx, uri, { createTrimesh: false, isStatic: false });
+  const eid = createGLTFEntity(ctx, uri, { createTrimesh: false, isStatic: false, animationController });
   addComponent(ctx.world, AvatarComponent, eid);
 
   Transform.position[eid].set([0, -1, 0]);

@@ -26,7 +26,8 @@ import { RemoteSceneSystem } from "./scene/scene.game";
 import { FlyCharacterControllerModule, FlyControllerSystem } from "../plugins/FlyCharacterController";
 import { NetworkInterpolationSystem } from "./network/NetworkInterpolationSystem";
 import { PrefabDisposalSystem, PrefabModule } from "./prefab/prefab.game";
-import { AnimationSystem } from "./animation/animation.game";
+import { GenericAnimationSystem } from "./animation/genericAnimation.game";
+import { MechAnimationSystem } from "./animation/mechAnimation.game";
 import { NameSystem } from "./component/Name";
 import { InteractionModule, InteractionSystem } from "../plugins/interaction/interaction.game";
 import { NametagModule, NametagSystem } from "../plugins/nametags/nametags.game";
@@ -35,7 +36,6 @@ import { GameResourceSystem } from "./resource/GameResourceSystem";
 import { RemoteCameraSystem } from "./camera/camera.game";
 import { InboundNetworkSystem } from "./network/inbound.game";
 import { OutboundNetworkSystem } from "./network/outbound.game";
-import { GenericAnimationSystem } from "./animation/genericAnimation.game";
 
 export default defineConfig<GameState>({
   modules: [
@@ -69,10 +69,10 @@ export default defineConfig<GameState>({
     PhysicsCharacterControllerSystem,
     FlyControllerSystem,
     PhysicsSystem,
-    //AnimationSystem,
 
-    //'Generic' animation system
+    MechAnimationSystem,
     GenericAnimationSystem,
+
     InteractionSystem,
     SpawnableSystem,
     ThirdroomSystem,

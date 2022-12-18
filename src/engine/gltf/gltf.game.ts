@@ -36,8 +36,7 @@ import { hasCharacterControllerExtension, inflateSceneCharacterController } from
 import { hasSpawnPointExtension } from "./MX_spawn_point";
 import { addTilesRenderer, hasTilesRendererExtension } from "./MX_tiles_renderer";
 import { RemoteNode } from "../node/node.game";
-//import { addAnimationComponent, BoneComponent } from "../animation/animation.game";
-import { addGenericAnimationComponent, BoneComponent } from "../animation/genericAnimation.game";
+import { addGenericAnimationComponent, BoneComponent, IAnimationActionMap, IAnimationControllerComponent } from "../animation/genericAnimation.game";
 import { loadGLTFAnimationClip } from "./animation.three";
 import {
   addCollider,
@@ -145,13 +144,14 @@ interface GLTFSceneOptions {
   createTrimesh?: boolean;
   isStatic?: boolean;
   resourceManager?: IRemoteResourceManager;
+  animationController?: IAnimationControllerComponent;
 }
 
 export async function inflateGLTFScene(
   ctx: GameState,
   sceneEid: number,
   uri: string,
-  { fileMap, sceneIndex, createTrimesh = true, isStatic, resourceManager }: GLTFSceneOptions = {}
+  { fileMap, sceneIndex, createTrimesh = true, isStatic, resourceManager, animationController }: GLTFSceneOptions = {}
 ): Promise<GLTFResource> {
   addTransformComponent(ctx.world, sceneEid);
 
@@ -235,9 +235,19 @@ export async function inflateGLTFScene(
     const clips = await Promise.all(
       resource.root.animations.map((a, i) => loadGLTFAnimationClip(ctx, resource, a, i, indexToObject3D))
     );
-    const actions = clips.map((clip) => mixer.clipAction(clip));
-    addGenericAnimationComponent(ctx.world, sceneEid, { mixer, clips, actions });
-    //    addAnimationComponent(ctx.world, sceneEid, { mixer, clips, actions });
+    const actions = clips.reduce((acc, clip) => {
+      acc[clip.name] = mixer.clipAction(clip);
+      return acc;
+    }, {} as IAnimationActionMap);
+
+    if (animationController) {
+      addComponent(ctx.world, animationController, sceneEid);
+    }
+    addGenericAnimationComponent(
+      ctx.world,
+      sceneEid,
+      { mixer, clips, actions, animationController }
+    );
   }
 
   const bloomStrength = getPostprocessingBloomStrength(scene);

@@ -1,16 +1,20 @@
 import { addComponent, defineQuery, enterQuery, IWorld, removeComponent } from "bitecs";
-import { AnimationAction, AnimationClip, AnimationMixer, Bone, LoopRepeat } from "three";
+import { AnimationAction, AnimationClip, AnimationMixer, Bone } from "three";
 
 import { Transform } from "../component/transform";
 import { GameState } from "../GameTypes";
 
-interface GenericAnimationActionMap {
+export interface IAnimationActionMap {
   [key: string]: AnimationAction;
 }
 export interface IAnimationComponent {
   mixer: AnimationMixer;
   clips: AnimationClip[];
-  actions: GenericAnimationActionMap;
+  actions: IAnimationActionMap;
+  animationController?: IAnimationControllerComponent;
+}
+export interface IAnimationControllerComponent {
+  currentAction: keyof IAnimationActionMap;
 }
 
 export const GenericAnimationComponent = new Map<number, IAnimationComponent>();
@@ -36,9 +40,9 @@ function initializeAnimations(ctx: GameState) {
       animation.actions = animation.clips.reduce((obj, clip) => {
         const action = animation.mixer.clipAction(clip).play();
         action.enabled = false;
-        obj[clip.name as keyof GenericAnimationActionMap] = action;
+        obj[clip.name as keyof IAnimationActionMap] = action;
         return obj;
-      }, {} as GenericAnimationActionMap);
+      }, {} as IAnimationActionMap);
     }
   }
   return ctx;
@@ -54,6 +58,7 @@ function processAnimations(ctx: GameState) {
     if (animation) {
       // collectively fade all animations out each frame
       const allActions: AnimationAction[] = Object.values(animation.actions);
+
 
       // synchronize selected clip action times
       //allActions[4].setLoop(LoopRepeat, Infinity);
@@ -82,7 +87,7 @@ function syncBones(ctx: GameState) {
   return ctx;
 }
 
-export function addGenericAnimationComponent(world: IWorld, eid: number, props?: any) {
+export function addGenericAnimationComponent(world: IWorld, eid: number, props: IAnimationComponent) {
   addComponent(world, GenericAnimationComponent, eid);
   GenericAnimationComponent.set(eid, props);
 }
