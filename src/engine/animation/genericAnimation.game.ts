@@ -1,8 +1,9 @@
 import { addComponent, defineQuery, enterQuery, IWorld, removeComponent } from "bitecs";
-import { AnimationAction, AnimationClip, AnimationMixer, Bone } from "three";
+import { AnimationAction, AnimationClip, AnimationMixer, Bone, LoopRepeat } from "three";
 
 import { Transform } from "../component/transform";
 import { GameState } from "../GameTypes";
+import { MechAnimationStates } from "./mechAnimation.game";
 
 export interface IAnimationActionMap {
   [key: string]: AnimationAction;
@@ -11,10 +12,12 @@ export interface IAnimationComponent {
   mixer: AnimationMixer;
   clips: AnimationClip[];
   actions: IAnimationActionMap;
-  animationController?: IAnimationControllerComponent;
+  animationController?: IGenericAnimationStateMachineIndex<MechAnimationStates>;
 }
-export interface IAnimationControllerComponent {
-  currentAction: keyof IAnimationActionMap;
+
+export interface IGenericAnimationStateMachineIndex<AnimationStateEnum> {
+  possibleStates: { [K in keyof AnimationStateEnum]: string }
+  [key: number]: string
 }
 
 export const GenericAnimationComponent = new Map<number, IAnimationComponent>();
@@ -53,19 +56,20 @@ function processAnimations(ctx: GameState) {
   for (let i = 0; i < ents.length; i++) {
     const eid = ents[i];
     // animation component exists on the inner avatar entity
-    const animation = GenericAnimationComponent.get(eid);
+    const animationComponent = GenericAnimationComponent.get(eid);
 
-    if (animation) {
-      // collectively fade all animations out each frame
-      const allActions: AnimationAction[] = Object.values(animation.actions);
+    if (animationComponent && animationComponent.animationController) {
+      const clipName = animationComponent.animationController[eid];
+      const animation = animationComponent.actions[clipName];
+      if (animation) {
+        animation.setLoop(LoopRepeat, Infinity);
+        animation.enabled = true;
+        animation.play();
+      }
+    }
 
-
-      // synchronize selected clip action times
-      //allActions[4].setLoop(LoopRepeat, Infinity);
-      //allActions[4].enabled = true;
-      //      allActions[4].play();
-
-      animation.mixer.update(ctx.dt);
+    if (animationComponent) {
+      animationComponent.mixer.update(ctx.dt);
     }
   }
   return ctx;
