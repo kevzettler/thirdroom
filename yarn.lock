@@ -1049,10 +1049,10 @@
     "@thi.ng/checks" "^3.3.1"
     "@thi.ng/errors" "^2.2.2"
 
-"@thirdroom/hydrogen-view-sdk@0.0.27":
-  version "0.0.27"
-  resolved "https://registry.yarnpkg.com/@thirdroom/hydrogen-view-sdk/-/hydrogen-view-sdk-0.0.27.tgz#ea3bd049c17d6146addb2e887248931fb37202e1"
-  integrity sha512-csLBuRxOfz3rYkeSbZobaUKBma+QkOtul+sUPqMW4e6dCCPIvNeuhb/hiF79rPA1VpB3UTlOKzpRp5fldeaTRA==
+"@thirdroom/hydrogen-view-sdk@0.0.29":
+  version "0.0.29"
+  resolved "https://registry.yarnpkg.com/@thirdroom/hydrogen-view-sdk/-/hydrogen-view-sdk-0.0.29.tgz#2dc2d903d95da8119e2bb08e63ebcb3edf23e1d3"
+  integrity sha512-8iv/RmKl+ipJejVQplehsPlwXZqEvL5n7Rr0n7W0RpzgOn2d0Rn34bdvezqpuoMlMeM89n7xPypJOw6QhQhfhg==
   dependencies:
     "@matrix-org/olm" "https://gitlab.matrix.org/api/v4/projects/27/packages/npm/@matrix-org/olm/-/@matrix-org/olm-3.2.8.tgz"
     another-json "^0.2.0"
@@ -3640,9 +3640,9 @@ json-stringify-safe@~5.0.1:
   integrity sha512-ZClg6AaYvamvYEE82d3Iyd3vSSIjQ+odgjaTzRuO3s7toCdFKczob2i0zCh7JE8kWn17yvAWhUVxvqGwUalsRA==
 
 json5@^1.0.1:
-  version "1.0.1"
-  resolved "https://registry.yarnpkg.com/json5/-/json5-1.0.1.tgz#779fb0018604fa854eacbf6252180d83543e3dbe"
-  integrity sha512-aKS4WQjPenRxiQsC93MNfjx+nbF4PAdYzmd/1JIj8HYzqfbu86beTuNgXDzPknWk0n0uARlyewZo4s++ES36Ow==
+  version "1.0.2"
+  resolved "https://registry.yarnpkg.com/json5/-/json5-1.0.2.tgz#63d98d60f21b313b77c4d6da18bfa69d80e1d593"
+  integrity sha512-g1MWMLBiz8FKi1e4w0UyVL3w+iJceWAFBAaBnnGKOpNa5f8TLktkbre1+s6oICydWAm+HRUGTmI+//xv2hvXYA==
   dependencies:
     minimist "^1.2.0"
 
@@ -3892,9 +3892,9 @@ minimist-options@4.1.0:
     kind-of "^6.0.3"
 
 minimist@^1.2.0, minimist@^1.2.6:
-  version "1.2.6"
-  resolved "https://registry.yarnpkg.com/minimist/-/minimist-1.2.6.tgz#8637a5b759ea0d6e98702cfb3a9283323c93af44"
-  integrity sha512-Jsjnk4bw3YJqYzbdyBiNsPWHPfO++UGG749Cxs6peCu5Xg4nrena6OVxOYxrQTqww0Jmwt+Ref8rggumkTLz9Q==
+  version "1.2.7"
+  resolved "https://registry.yarnpkg.com/minimist/-/minimist-1.2.7.tgz#daa1c4d91f507390437c6a8bc01078e7000c4d18"
+  integrity sha512-bzfL1YUZsP41gmu/qjrEk0Q6i2ix/cVeAhbCbqH9u3zYutS1cLg00qhrD0M2MVdCcx4Sc0UpP2eBWo9rotpq6g==
 
 mlly@^0.5.14, mlly@^0.5.2:
   version "0.5.14"
