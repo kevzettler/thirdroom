@@ -7,7 +7,6 @@ import { StatsModule } from "./stats/stats.main";
 import { MainContext } from "./MainThread";
 import { RendererModule } from "./renderer/renderer.main";
 import { ResourceModule, ResourceLoaderSystem, ReturnRecycledResourcesSystem } from "./resource/resource.main";
-import { ThirdroomModule } from "../plugins/thirdroom/thirdroom.main";
 import {
   IncomingMainThreadTripleBufferSystem,
   OutgoingMainThreadTripleBufferSystem,
@@ -24,7 +23,6 @@ export default defineConfig<MainContext>({
     InputModule,
     StatsModule,
     RendererModule,
-    ThirdroomModule,
     MatrixModule,
     PlayerModule,
   ],

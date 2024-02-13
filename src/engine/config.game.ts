@@ -25,7 +25,6 @@ import {
   ResourceModule,
   ResourceTickSystem,
 } from "./resource/resource.game";
-import { ThirdRoomModule, WorldLoaderSystem } from "../plugins/thirdroom/thirdroom.game";
 import { UpdateMatrixWorldSystem } from "./component/transform";
 import { FlyCharacterControllerModule, FlyControllerSystem } from "./player/FlyCharacterController";
 import { NetworkInterpolationSystem } from "./network/NetworkInterpolationSystem";
@@ -67,7 +66,6 @@ export default defineConfig<GameContext>({
     StatsModule,
     EditorModule,
     RendererModule,
-    ThirdRoomModule,
     MatrixModule,
     PlayerModule,
     KinematicCharacterControllerModule,
@@ -87,8 +85,6 @@ export default defineConfig<GameContext>({
     ActionMappingSystem,
 
     InboundNetworkSystem,
-
-    WorldLoaderSystem,
 
     CameraRigSystem,
 
