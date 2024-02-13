@@ -51,7 +51,7 @@ import { MatrixModule } from "./matrix/matrix.game";
 import { WebSGNetworkModule } from "./network/scripting.game";
 import { WebSGUIModule } from "./ui/ui.game";
 import { PlayerModule } from "./player/Player.game";
-import { ActionBarSystem } from "../plugins/thirdroom/action-bar.game";
+//import { ActionBarSystem } from "../plugins/thirdroom/action-bar.game";
 import { EnableCharacterControllerSystem } from "./player/CharacterController";
 import { CameraRigSystem } from "./player/CameraRig";
 
@@ -93,7 +93,7 @@ export default defineConfig<GameContext>({
     SetWebXRReferenceSpaceSystem,
     InteractionSystem,
     XRInteractionSystem,
-    ActionBarSystem,
+//    ActionBarSystem,
     EnableCharacterControllerSystem,
 
     // step physics forward and copy rigidbody data to transform component
