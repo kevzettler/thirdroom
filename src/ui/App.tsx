@@ -48,7 +48,7 @@ export function App() {
           }
         />
         <Route
-          path="/viewer"
+          path="/gltf"
           element={
             <Suspense fallback={<SplashScreen />}>
               <GLTFViewer />
