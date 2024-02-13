@@ -9,10 +9,8 @@ import "./App.css";
 import "@fontsource/inter/variable.css";
 import "@fontsource/noto-serif/latin.css";
 
-import { HydrogenRootView } from "./views/HydrogenRootView";
 import { SplashScreen } from "./views/components/splash-screen/SplashScreen";
 import { PageNotFound } from "./views/components/page-not-found/PageNotFound";
-import { LoadingScreen } from "./views/components/loading-screen/LoadingScreen";
 
 const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes);
 
@@ -32,85 +30,20 @@ function FocusOutlineManager() {
   return <></>;
 }
 
-const LandingPage = lazy(() => import("./site/LandingPage"));
-const PreviewBlog = lazy(() => import("./site/PreviewBlog"));
-const LoginView = lazy(() => import("./views/login/LoginView"));
 const GLTFViewer = lazy(() => import("./views/gltf-viewer/GLTFViewer"));
 const AssetPipeline = lazy(() => import("./views/asset-pipeline/AssetPipeline"));
-const SessionView = lazy(() => import("./views/session/SessionView"));
-const WorldRootView = lazy(() => import("./views/session/world/WorldRootView"));
-const MainMenuRootView = lazy(() => import("./views/session/world/MainMenuRootView"));
+const OfflineView = lazy(() => import("./OfflineScene"));
 
 export function App() {
   return (
     <JotaiProvider>
       <FocusOutlineManager />
       <SentryRoutes>
-        <Route element={<HydrogenRootView />}>
-          <Route
-            path="/landing"
-            element={
-              <Suspense fallback={<SplashScreen />}>
-                <LandingPage />
-              </Suspense>
-            }
-          />
-          <Route
-            path="/login"
-            element={
-              <Suspense fallback={<LoadingScreen />}>
-                <LoginView />
-              </Suspense>
-            }
-          />
-          <Route
-            element={
-              <Suspense fallback={<LoadingScreen />}>
-                <SessionView />
-              </Suspense>
-            }
-          >
-            {/* enter world by id */}
-            <Route
-              path="world/:worldId"
-              element={
-                <Suspense fallback={<></>}>
-                  <WorldRootView />
-                </Suspense>
-              }
-            />
-            {/* enter world by alias */}
-            <Route
-              path="world/"
-              element={
-                <Suspense fallback={<></>}>
-                  <WorldRootView />
-                </Suspense>
-              }
-            />
-            <Route
-              path="/"
-              element={
-                <Suspense fallback={<></>}>
-                  <MainMenuRootView />
-                </Suspense>
-              }
-            />
-          </Route>
-          <Route
-            path="/scene-preview"
-            element={
-              <Suspense fallback={<></>}>
-                <GLTFViewer />
-              </Suspense>
-            }
-          />
-        </Route>
         <Route
-          path="/preview"
+          path="/scene-preview"
           element={
-            <Suspense fallback={<SplashScreen />}>
-              <PreviewBlog />
+            <Suspense fallback={<></>}>
+              <GLTFViewer />
             </Suspense>
           }
         />
@@ -119,6 +52,14 @@ export function App() {
           element={
             <Suspense fallback={<SplashScreen />}>
               <GLTFViewer />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/"
+          element={
+            <Suspense fallback={<></>}>
+              <OfflineView />
             </Suspense>
           }
         />

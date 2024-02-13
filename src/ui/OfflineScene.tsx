@@ -2,7 +2,7 @@ import { useRef, useEffect } from "react";
 
 import { MainThread } from "../engine/MainThread";
 
-export function OfflineScene() {
+export default function OfflineScene() {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -21,6 +21,7 @@ export function OfflineScene() {
 
   return (
     <div>
+      <h1>Offline Manifold</h1>
       <canvas ref={canvasRef} width="800" height="600" />
     </div>
   );
