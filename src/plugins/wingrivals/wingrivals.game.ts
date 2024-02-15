@@ -4,9 +4,11 @@ import { addComponent, defineComponent, defineQuery, Types } from "bitecs";
 import { defineModule } from "../../engine/module/module.common";
 import { GameContext } from "../../engine/GameTypes";
 import { loadGLTF, loadDefaultGLTFScene } from "../../engine/gltf/gltf.game";
-import { RemoteNode, RemoteScene, RemoteEnvironment, addObjectToWorld } from "../../engine/resource/RemoteResources";
+import { RemoteNode, RemoteScene, RemoteEnvironment, addObjectToWorld, RemoteImage, RemoteReflectionProbe, RemoteTexture, RemoteSampler } from "../../engine/resource/RemoteResources";
+import { SamplerMapping } from "../../engine/resource/schema";
 import {
-  createRemoteResourceManager } from "../../engine/resource/resource.game"
+  createRemoteResourceManager
+} from "../../engine/resource/resource.game"
 import { createRemotePerspectiveCamera } from "../../engine/camera/camera.game";
 import { addChild } from "../../engine/component/transform";
 import { CameraRigType } from "../../engine/player/CameraRig";
@@ -71,29 +73,29 @@ export const WingRivalsModule = defineModule<GameContext, {}>({
     rootIsStatic: true,
   }) as RemoteScene;
 
-// if (!environmentScene.reflectionProbe || !environmentScene.backgroundTexture) {
-//     const defaultEnvironmentMapTexture = new RemoteTexture(ctx.resourceManager, {
-//       name: "Environment Map Texture",
-//       source: new RemoteImage(ctx.resourceManager, {
-//         name: "Environment Map Image",
-//         uri: "/cubemap/clouds_2k.hdr",
-//         flipY: true,
-//       }),
-//       sampler: new RemoteSampler(ctx.resourceManager, {
-//         mapping: SamplerMapping.EquirectangularReflectionMapping,
-//       }),
-//     });
-//
-//     if (!environmentScene.reflectionProbe) {
-//       environmentScene.reflectionProbe = new RemoteReflectionProbe(ctx.resourceManager, {
-//         reflectionProbeTexture: defaultEnvironmentMapTexture,
-//       });
-//     }
-//
-//     if (!environmentScene.backgroundTexture) {
-//       environmentScene.backgroundTexture = defaultEnvironmentMapTexture;
-//     }
-//   }
+    if (!environmentScene.reflectionProbe || !environmentScene.backgroundTexture) {
+      const defaultEnvironmentMapTexture = new RemoteTexture(ctx.resourceManager, {
+        name: "Environment Map Texture",
+        source: new RemoteImage(ctx.resourceManager, {
+          name: "Environment Map Image",
+          uri: "/cubemap/clouds_2k.hdr",
+          flipY: true,
+        }),
+        sampler: new RemoteSampler(ctx.resourceManager, {
+          mapping: SamplerMapping.EquirectangularReflectionMapping,
+        }),
+      });
+
+      if (!environmentScene.reflectionProbe) {
+        environmentScene.reflectionProbe = new RemoteReflectionProbe(ctx.resourceManager, {
+          reflectionProbeTexture: defaultEnvironmentMapTexture,
+        });
+      }
+
+      if (!environmentScene.backgroundTexture) {
+        environmentScene.backgroundTexture = defaultEnvironmentMapTexture;
+      }
+    }
 
   const transientScene = new RemoteScene(ctx.resourceManager, {
     name: "Transient Scene",
@@ -106,8 +108,6 @@ export const WingRivalsModule = defineModule<GameContext, {}>({
 
 
   const container = new RemoteNode(ctx.resourceManager);
-
-
     addComponent(ctx.world, FlyControls, container.eid);
     FlyControls.set(container.eid, {
       speed: 10,
