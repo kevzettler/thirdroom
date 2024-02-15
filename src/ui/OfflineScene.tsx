@@ -20,9 +20,9 @@ export default function OfflineScene() {
   }, []);
 
   return (
-    <div>
-      <h1 style={{position: 'absolute', top: "0px"}}>Offline Manifold....</h1>
-      <canvas ref={canvasRef} width="800" height="600" />
+    <div style={{ width: "100%", height: "100%" }}>
+      <h1 style={{ position: 'absolute', top: "0px" }}>Offline Manifold....</h1>
+      <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} />
     </div>
   );
 }
