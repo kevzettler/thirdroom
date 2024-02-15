@@ -51,9 +51,9 @@ import { MatrixModule } from "./matrix/matrix.game";
 import { WebSGNetworkModule } from "./network/scripting.game";
 import { WebSGUIModule } from "./ui/ui.game";
 import { PlayerModule } from "./player/Player.game";
-//import { ActionBarSystem } from "../plugins/thirdroom/action-bar.game";
 import { EnableCharacterControllerSystem } from "./player/CharacterController";
 import { CameraRigSystem } from "./player/CameraRig";
+import { WingRivalsModule } from "../plugins/wingrivals/wingrivals.game";
 
 export default defineConfig<GameContext>({
   modules: [
@@ -75,6 +75,7 @@ export default defineConfig<GameContext>({
     NametagModule,
     WebSGNetworkModule,
     WebSGUIModule,
+    WingRivalsModule
   ],
   systems: [
     IncomingTripleBufferSystem,
@@ -93,7 +94,6 @@ export default defineConfig<GameContext>({
     SetWebXRReferenceSpaceSystem,
     InteractionSystem,
     XRInteractionSystem,
-//    ActionBarSystem,
     EnableCharacterControllerSystem,
 
     // step physics forward and copy rigidbody data to transform component

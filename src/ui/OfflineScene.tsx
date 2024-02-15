@@ -21,7 +21,7 @@ export default function OfflineScene() {
 
   return (
     <div>
-      <h1>Offline Manifold</h1>
+      <h1 style={{position: 'absolute', top: "0px"}}>Offline Manifold....</h1>
       <canvas ref={canvasRef} width="800" height="600" />
     </div>
   );
