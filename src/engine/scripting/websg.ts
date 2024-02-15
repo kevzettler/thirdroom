@@ -1952,7 +1952,7 @@ export function createWebSGModule(ctx: GameContext, wasmCtx: WASMModuleContext) 
         }
 
         node.interactable = new RemoteInteractable(wasmCtx.resourceManager, { type });
-        addInteractableComponent(ctx, physics, node, type);
+        addInteractableComponent(ctx, node, type);
 
         return 0;
       } catch (error) {
@@ -2417,7 +2417,7 @@ export function createWebSGModule(ctx: GameContext, wasmCtx: WASMModuleContext) 
           label,
         });
 
-        addInteractableComponent(ctx, physics, button, InteractableType.UI);
+        addInteractableComponent(ctx, button, InteractableType.UI);
 
         rewind();
       }

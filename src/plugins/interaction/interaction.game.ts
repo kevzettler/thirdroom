@@ -897,7 +897,6 @@ export function sendInteractionMessage(ctx: GameContext, action: InteractableAct
 
 export function addInteractableComponent(
   ctx: GameContext,
-  physics: PhysicsModuleState,
   node: RemoteNode | RemoteUIButton,
   interactableType: InteractableType
 ) {

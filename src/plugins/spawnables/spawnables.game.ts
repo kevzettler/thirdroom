@@ -246,7 +246,7 @@ function createBall(
     })
   );
 
-  addInteractableComponent(ctx, physics, node, InteractableType.Grabbable);
+  addInteractableComponent(ctx, node, InteractableType.Grabbable);
 
   const audioEmitter = new RemoteAudioEmitter(ctx.resourceManager, {
     type: AudioEmitterType.Positional,
@@ -313,7 +313,7 @@ function createCrate(
     })
   );
 
-  addInteractableComponent(ctx, physics, node, InteractableType.Grabbable);
+  addInteractableComponent(ctx, node, InteractableType.Grabbable);
 
   return node;
 }

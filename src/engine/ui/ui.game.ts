@@ -97,7 +97,7 @@ export function createUICanvasNode(
     })
   );
 
-  addInteractableComponent(ctx, physics, node, InteractableType.UI);
+  addInteractableComponent(ctx, node, InteractableType.UI);
 
   return node;
 }
@@ -148,7 +148,7 @@ export function initNodeUICanvas(ctx: GameContext, physics: PhysicsModuleState, 
     })
   );
 
-  addInteractableComponent(ctx, physics, node, InteractableType.UI);
+  addInteractableComponent(ctx, node, InteractableType.UI);
 }
 
 export function getLastUIElementChild(parent: RemoteUIElement): RemoteUIElement | undefined {

@@ -99,7 +99,7 @@ export function registerPlayerPrefabs(ctx: GameContext) {
         })
       );
 
-      addInteractableComponent(ctx, physics, container, InteractableType.Player);
+      addInteractableComponent(ctx, container, InteractableType.Player);
 
       addComponent(ctx.world, AvatarRef, container.eid);
       AvatarRef.eid[container.eid] = rig.eid;
