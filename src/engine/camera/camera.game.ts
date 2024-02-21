@@ -23,7 +23,7 @@ export function createRemotePerspectiveCamera(
     type: CameraType.Perspective,
     yfov: glMatrix.toRadian(75),
     znear: 0.1,
-    zfar: 2000,
+    zfar: 200000,
   });
 }
 

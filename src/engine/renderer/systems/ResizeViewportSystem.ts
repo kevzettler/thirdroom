@@ -9,11 +9,6 @@ export function ResizeViewportSystem(ctx: RenderContext) {
   const activeScene = ctx.worldResource.environment?.publicScene;
   const activeCameraNode = ctx.worldResource.activeCameraNode;
 
-  // TODO: Remove this
-  if (activeScene?.eid !== rendererModule.prevSceneResource) {
-    rendererModule.enableMatrixMaterial = false;
-  }
-
   if (
     activeCameraNode &&
     activeCameraNode.cameraObject &&

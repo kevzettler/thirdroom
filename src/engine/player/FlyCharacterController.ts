@@ -86,10 +86,10 @@ const _p = new Vector3();
 
 function applyFlyControls(
   ctx: GameContext,
-  body: RAPIER.RigidBody,
   input: GameInputModule,
   playerRig: RemoteNode,
-  camera: RemoteNode
+  camera: RemoteNode,
+  body?: RAPIER.RigidBody,
 ) {
   const { speed } = FlyControls.get(playerRig.eid)!;
   const actionStates = input.actionStates;
@@ -111,8 +111,10 @@ function applyFlyControls(
   _q.fromArray(playerRig.quaternion);
   _p.fromArray(playerRig.position);
 
-  body.setNextKinematicRotation(_q);
-  body.setNextKinematicTranslation(_p);
+  if(body){
+    body.setNextKinematicRotation(_q);
+    body.setNextKinematicTranslation(_p);
+  }
 }
 
 export function FlyControllerSystem(ctx: GameContext) {
@@ -125,10 +127,7 @@ export function FlyControllerSystem(ctx: GameContext) {
     const camera = getCamera(ctx, playerRig);
     const body = playerRig.physicsBody?.body;
 
-    if (!body) {
-      throw new Error("Physics body not found on eid " + playerRigEid);
-    }
 
-    applyFlyControls(ctx, body, input, playerRig, camera);
+    applyFlyControls(ctx, input, playerRig, camera, body);
   }
 }

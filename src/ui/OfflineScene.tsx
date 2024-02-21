@@ -1,9 +1,9 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 
 import { MainThread } from "../engine/MainThread";
 
 export default function OfflineScene() {
-  const canvasRef = useRef(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     if (canvasRef.current) {
@@ -19,10 +19,15 @@ export default function OfflineScene() {
     }
   }, []);
 
+  const onClickCanvas = useCallback(() => {
+    if (canvasRef.current) {
+      canvasRef.current.requestPointerLock();
+    }
+  }, []);
+
   return (
     <div style={{ width: "100%", height: "100%" }}>
-      <h1 style={{ position: 'absolute', top: "0px" }}>Offline Manifold....</h1>
-      <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} />
+      <canvas ref={canvasRef} style={{ width: "100%", height: "100%" }} onClick={onClickCanvas} />
     </div>
   );
 }

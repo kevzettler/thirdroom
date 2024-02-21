@@ -69,6 +69,7 @@ export const InputModule = defineModule<MainContext, MainInputModule>({
       }
 
       if (!pointerLocked && !orbiting) {
+        console.log("********exiting input controller? no pointerLock no orbiting********");
         return;
       }
 

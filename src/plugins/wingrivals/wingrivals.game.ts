@@ -1,56 +1,21 @@
 import { quat, vec3 } from "gl-matrix";
-import { addComponent, defineComponent, defineQuery, Types } from "bitecs";
+import { addComponent, defineComponent } from "bitecs";
 
-import { defineModule } from "../../engine/module/module.common";
+import { enableActionMap} from "../../engine/input/ActionMappingSystem";
+import { defineModule, getModule } from "../../engine/module/module.common";
 import { GameContext } from "../../engine/GameTypes";
 import { loadGLTF, loadDefaultGLTFScene } from "../../engine/gltf/gltf.game";
 import { RemoteNode, RemoteScene, RemoteEnvironment, addObjectToWorld, RemoteImage, RemoteReflectionProbe, RemoteTexture, RemoteSampler } from "../../engine/resource/RemoteResources";
 import { SamplerMapping } from "../../engine/resource/schema";
+import { InputModule } from "../../engine/input/input.game";
 import {
   createRemoteResourceManager
 } from "../../engine/resource/resource.game"
-import { createRemotePerspectiveCamera } from "../../engine/camera/camera.game";
-import { addChild } from "../../engine/component/transform";
-import { CameraRigType } from "../../engine/player/CameraRig";
-
+import { CameraRigType, CameraRigActionMap, addCameraRig } from "../../engine/player/CameraRig";
+import { CharacterControllerActionMap } from "../../engine/player/CharacterController";
+import { FlyCharacterControllerActionMap, FlyControls } from "../../engine/player/FlyCharacterController";
 const Player = defineComponent({});
 const OurPlayer = defineComponent({});
-interface IFlyPlayerRig {
-  speed: number;
-}
-export const FlyControls: Map<number, IFlyPlayerRig> = new Map();
-export const flyControlsQuery = defineQuery([FlyControls]);
-
-export const CameraRef = defineComponent({ eid: Types.eid });
-
-
-interface PitchComponent {
-  type: CameraRigType;
-  target: number;
-  pitch: number;
-  maxAngle: number;
-  minAngle: number;
-  sensitivity: number;
-}
-interface YawComponent {
-  type: CameraRigType;
-  target: number;
-  sensitivity: number;
-  snapTurnDisabled: boolean;
-}
-const DEFAULT_SENSITIVITY = 100;
-const ZOOM_MIN = 0.5;
-const ZOOM_MAX = 10;
-
-interface ZoomComponent {
-  type: CameraRigType;
-  target: number;
-  min: number;
-  max: number;
-}
-export const PitchComponent = new Map<number, PitchComponent>();
-export const YawComponent = new Map<number, YawComponent>();
-export const ZoomComponent = new Map<number, ZoomComponent>();
 
 
 export const WingRivalsModule = defineModule<GameContext, {}>({
@@ -64,9 +29,9 @@ export const WingRivalsModule = defineModule<GameContext, {}>({
 
    const resourceManager = createRemoteResourceManager(ctx, "environment");
 
-   const sceneGLTFResource = await loadGLTF(ctx, "/gltf/omega-island.glb", {
-     resourceManager,
-   });
+    const sceneGLTFResource = await loadGLTF(ctx, "/gltf/Omega_Island_No_Sky_No_Sun_No_Trees.glb", {
+      resourceManager,
+    });
 
   const environmentScene = loadDefaultGLTFScene(ctx, sceneGLTFResource, {
     createDefaultMeshColliders: true,
@@ -79,10 +44,10 @@ export const WingRivalsModule = defineModule<GameContext, {}>({
         source: new RemoteImage(ctx.resourceManager, {
           name: "Environment Map Image",
           uri: "/cubemap/clouds_2k.hdr",
-          flipY: true,
+          flipY: false,
         }),
         sampler: new RemoteSampler(ctx.resourceManager, {
-          mapping: SamplerMapping.EquirectangularReflectionMapping,
+          mapping: SamplerMapping.EquirectangularRefractionMapping,
         }),
       });
 
@@ -108,58 +73,13 @@ export const WingRivalsModule = defineModule<GameContext, {}>({
 
 
   const container = new RemoteNode(ctx.resourceManager);
+
     addComponent(ctx.world, FlyControls, container.eid);
     FlyControls.set(container.eid, {
-      speed: 10,
+      speed: 1000,
     });
 
-    // add camera anchor
-    const cameraAnchor = new RemoteNode(ctx.resourceManager);
-    cameraAnchor.name = "Camera Anchor";
-
-    // add camera
-    const camera = new RemoteNode(ctx.resourceManager, {
-      camera: createRemotePerspectiveCamera(ctx),
-    });
-
-    addComponent(ctx.world, CameraRef, container.eid);
-    CameraRef.eid[container.eid] = camera.eid;
-
-    // add hierarchy
-    addChild(container, cameraAnchor);
-    addChild(cameraAnchor, camera);
-
-    // add targets
-    addComponent(ctx.world, PitchComponent, container.eid);
-    const pitch: PitchComponent = {
-      type: CameraRigType.PointerLock,
-      target: cameraAnchor.eid,
-      pitch: 0,
-      maxAngle: 89,
-      minAngle: -89,
-      sensitivity: DEFAULT_SENSITIVITY,
-    };
-    PitchComponent.set(container.eid, pitch);
-
-
-    addComponent(ctx.world, YawComponent, container.eid);
-    const yaw: YawComponent = {
-      type: CameraRigType.PointerLock,
-      target: container.eid,
-      sensitivity: DEFAULT_SENSITIVITY,
-      snapTurnDisabled: false,
-    };
-    YawComponent.set(container.eid, yaw);
-
-
-    addComponent(ctx.world, ZoomComponent, container.eid);
-    const zoom: ZoomComponent = {
-      type: CameraRigType.PointerLock,
-      target: camera.eid,
-      min: ZOOM_MIN,
-      max: ZOOM_MAX,
-    };
-    ZoomComponent.set(container.eid, zoom);
+    const [camera] = addCameraRig(ctx, container, CameraRigType.PointerLock);
 
 
     addComponent(ctx.world, Player, container.eid);
@@ -173,14 +93,10 @@ export const WingRivalsModule = defineModule<GameContext, {}>({
     container.position.set(vec3.fromValues(0, 400, 0));
     container.quaternion.set(quat.create());
 
-  // if (environmentScript) {
-//   addScriptComponent(ctx, environmentScene, environmentScript);
-//   environmentScript.entered();
-//   }
 
-    // const camera = new RemoteNode(ctx.resourceManager, {
-    //   camera: createRemotePerspectiveCamera(ctx),
-    // });
-
+    const input = getModule(ctx, InputModule);
+    enableActionMap(input, CameraRigActionMap);
+    enableActionMap(input, CharacterControllerActionMap);
+    enableActionMap(input, FlyCharacterControllerActionMap);
   }
 });

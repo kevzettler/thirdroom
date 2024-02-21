@@ -46,7 +46,7 @@ import { IncomingTripleBufferSystem } from "./resource/IncomingTripleBufferSyste
 import { OutgoingTripleBufferSystem } from "./resource/OutgoingTripleBufferSystem";
 import { SkipRenderLerpSystem } from "./component/SkipRenderLerpSystem";
 import { SetWebXRReferenceSpaceSystem, WebXRAvatarRigSystem } from "./input/WebXRAvatarRigSystem";
-import { XRInteractionSystem } from "../plugins/interaction/XRInteractionSystem";
+// import { XRInteractionSystem } from "../plugins/interaction/XRInteractionSystem";
 import { MatrixModule } from "./matrix/matrix.game";
 import { WebSGNetworkModule } from "./network/scripting.game";
 import { WebSGUIModule } from "./ui/ui.game";
@@ -93,7 +93,8 @@ export default defineConfig<GameContext>({
     FlyControllerSystem,
     SetWebXRReferenceSpaceSystem,
     InteractionSystem,
-    XRInteractionSystem,
+
+    //    XRInteractionSystem,
     EnableCharacterControllerSystem,
 
     // step physics forward and copy rigidbody data to transform component
