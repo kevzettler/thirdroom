@@ -24,10 +24,14 @@ type RemoteResourcePropValue<
   ? string
   : Def["schema"][Prop]["type"] extends "u32"
   ? number
+  : Def["schema"][Prop]["type"] extends "i32"
+  ? number
   : Def["schema"][Prop]["type"] extends "arrayBuffer"
   ? SharedArrayBuffer
   : Def["schema"][Prop]["type"] extends "bool"
   ? boolean
+  : Def["schema"][Prop]["type"] extends "mat3"
+  ? Float32Array
   : Def["schema"][Prop]["type"] extends "mat4"
   ? Float32Array
   : Def["schema"][Prop]["type"] extends "f32"
@@ -39,6 +43,8 @@ type RemoteResourcePropValue<
   : Def["schema"][Prop]["type"] extends "vec2"
   ? Float32Array
   : Def["schema"][Prop]["type"] extends "vec3"
+  ? Float32Array
+  : Def["schema"][Prop]["type"] extends "vec4"
   ? Float32Array
   : Def["schema"][Prop]["type"] extends "quat"
   ? Float32Array
@@ -86,10 +92,14 @@ type InitialRemoteResourcePropValue<
   ? string
   : Def["schema"][Prop]["type"] extends "u32"
   ? number
+  : Def["schema"][Prop]["type"] extends "i32"
+  ? number
   : Def["schema"][Prop]["type"] extends "arrayBuffer"
   ? SharedArrayBuffer
   : Def["schema"][Prop]["type"] extends "bool"
   ? boolean
+  : Def["schema"][Prop]["type"] extends "mat3"
+  ? ArrayLike<number>
   : Def["schema"][Prop]["type"] extends "mat4"
   ? ArrayLike<number>
   : Def["schema"][Prop]["type"] extends "f32"
@@ -101,6 +111,8 @@ type InitialRemoteResourcePropValue<
   : Def["schema"][Prop]["type"] extends "vec2"
   ? ArrayLike<number>
   : Def["schema"][Prop]["type"] extends "vec3"
+  ? ArrayLike<number>
+  : Def["schema"][Prop]["type"] extends "vec4"
   ? ArrayLike<number>
   : Def["schema"][Prop]["type"] extends "quat"
   ? ArrayLike<number>
@@ -161,6 +173,7 @@ export interface RemoteResource extends Resource {
   addRef(): void;
   removeRef(): void;
   removeResourceRefs(): void;
+  dispose(): void;
 }
 
 export function defineRemoteResourceClass<T extends number, S extends Schema, Def extends DefinedResource<T, S>>(
@@ -307,6 +320,7 @@ export function defineRemoteResourceClass<T extends number, S extends Schema, De
         }
       },
     },
+    dispose: { value() {} },
   });
 
   let vecViewIndex = 0;
@@ -523,6 +537,21 @@ function defineProp<T extends number, S extends Schema, Def extends DefinedResou
         ...setter,
         get(this: RemoteResourceInstance<Def>) {
           return this.f32View[offset];
+        },
+      });
+    } else if (prop.type === "i32") {
+      const setter = prop.mutable
+        ? {
+            set(this: RemoteResourceInstance<Def>, value: number) {
+              this.u32View[offset] = value >>> 0; // logical right shift by 0 converts int from signed to unsigned
+            },
+          }
+        : undefined;
+
+      Object.defineProperty(RemoteResourceClass.prototype, propName, {
+        ...setter,
+        get(this: RemoteResourceInstance<Def>) {
+          return this.u32View[offset] | 0; // bitwise OR of 0 converts int from unsigned to signed
         },
       });
     } else {

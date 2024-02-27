@@ -104,6 +104,7 @@ interface ResourceModuleState<ThreadContext extends ConsumerThreadContext> {
   resources: Map<ResourceId, LocalResourceTypes>;
   resourceInfos: Map<ResourceId, LocalResourceInfo>;
   resourcesByType: Map<string, LocalResourceTypes[]>;
+  resourceConstructors: ILocalResourceConstructor<ThreadContext>[];
   resourceLoaders: Map<string, ResourceLoader<ThreadContext>>;
   fromGameState: FromGameResourceModuleStateTripleBuffer;
   toGameState: ToGameResourceModuleStateTripleBuffer;
@@ -155,6 +156,7 @@ export const createLocalResourceModule = <ThreadContext extends ConsumerThreadCo
         resourceInfos: new Map(),
         resourcesByType: new Map(),
         resourceLoaders: new Map(),
+        resourceConstructors: [],
         fromGameState,
         toGameState,
         disposedResources,
@@ -185,6 +187,8 @@ export const createLocalResourceModule = <ThreadContext extends ConsumerThreadCo
 
     const LocalResourceClass =
       "resourceDef" in resourceDefOrClass ? resourceDefOrClass : defineLocalResourceClass(resourceDefOrClass);
+
+    resourceModule.resourceConstructors.push(LocalResourceClass);
 
     const resourceDef = LocalResourceClass.resourceDef;
 
@@ -218,6 +222,8 @@ export const createLocalResourceModule = <ThreadContext extends ConsumerThreadCo
     }
 
     resourceModule.resourceLoaders.set(resourceDef.name, loadLocalResource);
+
+    resourceModule.resourcesByType.set(resourceDef.name, []);
 
     return () => {
       resourceModule.resourceLoaders.delete(resourceDef.name);
@@ -279,7 +285,9 @@ export const createLocalResourceModule = <ThreadContext extends ConsumerThreadCo
     }
 
     // Then drain all of the messages postMessages containing create resource data
-    for (const message of drainResourceMessages()) {
+    const messages = drainResourceMessages();
+    for (let i = 0; i < messages.length; i++) {
+      const message = messages[i];
       createResourceMessages.push(message);
     }
 

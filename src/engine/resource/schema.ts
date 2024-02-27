@@ -1,3 +1,34 @@
+import {
+  FLEX_DIRECTION_COLUMN,
+  FLEX_DIRECTION_COLUMN_REVERSE,
+  FLEX_DIRECTION_ROW,
+  FLEX_DIRECTION_ROW_REVERSE,
+  POSITION_TYPE_ABSOLUTE,
+  POSITION_TYPE_RELATIVE,
+  ALIGN_AUTO,
+  ALIGN_BASELINE,
+  ALIGN_CENTER,
+  ALIGN_FLEX_END,
+  ALIGN_FLEX_START,
+  ALIGN_SPACE_AROUND,
+  ALIGN_SPACE_BETWEEN,
+  ALIGN_STRETCH,
+  JUSTIFY_CENTER,
+  JUSTIFY_FLEX_END,
+  JUSTIFY_FLEX_START,
+  JUSTIFY_SPACE_AROUND,
+  JUSTIFY_SPACE_BETWEEN,
+  JUSTIFY_SPACE_EVENLY,
+  WRAP_NO_WRAP,
+  WRAP_WRAP,
+  WRAP_WRAP_REVERSE,
+  EDGE_LEFT,
+  EDGE_TOP,
+  EDGE_RIGHT,
+  EDGE_BOTTOM,
+} from "yoga-wasm-web";
+import * as RAPIER from "@dimforge/rapier3d-compat";
+
 import { defineResource, PropType } from "./ResourceDefinition";
 
 export enum ResourceType {
@@ -32,6 +63,25 @@ export enum ResourceType {
   World,
   Avatar,
   Environment,
+  UICanvas,
+  UIText,
+  UIButton,
+  UIImage,
+  UIElement,
+  Collider,
+  PhysicsBody,
+}
+
+export enum QueryModifier {
+  All,
+  None,
+  Any,
+}
+
+export enum ComponentPropStorageType {
+  i32,
+  u32,
+  f32,
 }
 
 export const NametagResource = defineResource("nametag", ResourceType.Nametag, {
@@ -250,7 +300,6 @@ export const LightResource = defineResource("light", ResourceType.Light, {
   color: PropType.rgb({ default: [1, 1, 1], script: true }),
   intensity: PropType.f32({ default: 1, script: true }),
   range: PropType.f32({ default: 1, script: true }),
-  castShadow: PropType.bool({ default: true, script: true }),
   innerConeAngle: PropType.f32({ default: 1, script: true }),
   outerConeAngle: PropType.f32({ default: 1, script: true }),
 });
@@ -357,6 +406,9 @@ export const MeshPrimitiveResource = defineResource("mesh-primitive", ResourceTy
   indices: PropType.ref(AccessorResource, { mutable: false, script: true }),
   material: PropType.ref(MaterialResource, { script: true }),
   mode: PropType.enum(MeshPrimitiveMode, { default: MeshPrimitiveMode.TRIANGLES, script: true, mutable: false }),
+  drawStart: PropType.u32({ script: true, mutable: true }),
+  drawCount: PropType.u32({ script: true, mutable: true }),
+  hologramMaterialEnabled: PropType.bool({ script: true }),
   // TODO: targets
 });
 
@@ -402,6 +454,7 @@ export enum InteractableType {
   Grabbable = 2,
   Player = 3,
   Portal = 4,
+  UI = 5,
 }
 
 export const InteractableResource = defineResource("interactable", ResourceType.Interactable, {
@@ -416,22 +469,224 @@ export const InteractableResource = defineResource("interactable", ResourceType.
   released: PropType.bool({ mutableScript: false, script: true }),
 });
 
-export const NodeResource = defineResource("node", ResourceType.Node, {
-  name: PropType.string({ default: "Node", script: true }),
-  parentScene: PropType.ref("scene", { backRef: true }),
+export enum ElementType {
+  Flex,
+  Text,
+  Button,
+  Image,
+}
+
+export enum FlexDirection {
+  Column = FLEX_DIRECTION_COLUMN,
+  ColumnReverse = FLEX_DIRECTION_COLUMN_REVERSE,
+  Row = FLEX_DIRECTION_ROW,
+  RowReverse = FLEX_DIRECTION_ROW_REVERSE,
+}
+
+export enum ElementPositionType {
+  Relative = POSITION_TYPE_RELATIVE,
+  Absolute = POSITION_TYPE_ABSOLUTE,
+}
+
+export enum FlexAlign {
+  Auto = ALIGN_AUTO,
+  FlexStart = ALIGN_FLEX_START,
+  Center = ALIGN_CENTER,
+  FlexEnd = ALIGN_FLEX_END,
+  Stretch = ALIGN_STRETCH,
+  Baseline = ALIGN_BASELINE,
+  SpaceBetween = ALIGN_SPACE_BETWEEN,
+  SpaceAround = ALIGN_SPACE_AROUND,
+}
+
+export enum FlexJustify {
+  FlexStart = JUSTIFY_FLEX_START,
+  Center = JUSTIFY_CENTER,
+  FlexEnd = JUSTIFY_FLEX_END,
+  SpaceBetween = JUSTIFY_SPACE_BETWEEN,
+  SpaceAround = JUSTIFY_SPACE_AROUND,
+  SpaceEvenly = JUSTIFY_SPACE_EVENLY,
+}
+
+export enum FlexWrap {
+  NoWrap = WRAP_NO_WRAP,
+  Wrap = WRAP_WRAP,
+  WrapReverse = WRAP_WRAP_REVERSE,
+}
+
+export enum FlexEdge {
+  LEFT = EDGE_LEFT,
+  TOP = EDGE_TOP,
+  RIGHT = EDGE_RIGHT,
+  BOTTOM = EDGE_BOTTOM,
+}
+
+export const UITextResource = defineResource("ui-text", ResourceType.UIText, {
+  value: PropType.string({ script: true }),
+  fontFamily: PropType.string({ script: true }),
+  fontSize: PropType.f32({ default: 12, script: true }),
+  fontWeight: PropType.string({ script: true }),
+  fontStyle: PropType.string({ script: true }),
+  color: PropType.rgba({ script: true }),
+});
+
+export const UIButtonResource = defineResource("ui-button", ResourceType.UIButton, {
+  interactable: PropType.ref(InteractableResource, { script: true }),
+  label: PropType.string({ script: true }),
+});
+
+export const UIImageResource = defineResource("ui-image", ResourceType.UIImage, {
+  source: PropType.ref(ImageResource, { script: true }),
+  alt: PropType.string({ script: true, required: false }),
+});
+
+export const UIElementResource = defineResource("ui-element", ResourceType.UIElement, {
+  name: PropType.string({ default: "UIElement", script: true }),
+  type: PropType.enum(ElementType, { default: ElementType.Flex, mutable: false }),
+
+  position: PropType.vec4({ script: true, mutable: true }),
+
+  positionType: PropType.enum(ElementPositionType, {
+    default: ElementPositionType.Relative,
+    script: true,
+    mutable: true,
+  }),
+
+  alignContent: PropType.enum(FlexAlign, {
+    default: FlexAlign.FlexStart,
+    script: true,
+    mutable: true,
+  }),
+
+  alignItems: PropType.enum(FlexAlign, {
+    default: FlexAlign.Stretch,
+    script: true,
+    mutable: true,
+  }),
+
+  alignSelf: PropType.enum(FlexAlign, {
+    default: FlexAlign.Auto,
+    script: true,
+    mutable: true,
+  }),
+
+  flexDirection: PropType.enum(FlexDirection, {
+    default: FlexDirection.Row,
+    script: true,
+    mutable: true,
+  }),
+
+  flexWrap: PropType.enum(FlexWrap, {
+    default: FlexWrap.NoWrap,
+    script: true,
+    mutable: true,
+  }),
+
+  // Negative values are auto
+  flexBasis: PropType.f32({ default: -1, script: true, mutable: true }),
+
+  flexGrow: PropType.f32({ script: true, mutable: true, min: 0 }),
+
+  flexShrink: PropType.f32({ default: 1, script: true, mutable: true, min: 0 }),
+
+  justifyContent: PropType.enum(FlexJustify, {
+    default: FlexJustify.FlexStart,
+    script: true,
+    mutable: true,
+  }),
+
+  // Negative values are auto
+  width: PropType.f32({ default: -1, script: true, mutable: true }),
+  height: PropType.f32({ default: -1, script: true, mutable: true }),
+
+  minWidth: PropType.f32({ default: -1, script: true, mutable: true }),
+  minHeight: PropType.f32({ default: -1, script: true, mutable: true }),
+
+  maxWidth: PropType.f32({ default: -1, script: true, mutable: true }),
+  maxHeight: PropType.f32({ default: -1, script: true, mutable: true }),
+
+  backgroundColor: PropType.rgba({ script: true, mutable: true }),
+  borderColor: PropType.rgba({ script: true, mutable: true }),
+
+  // TODO: vec4 alias
+  padding: PropType.vec4({ script: true, mutable: true }),
+  margin: PropType.vec4({ script: true, mutable: true }),
+  borderWidth: PropType.vec4({ script: true, mutable: true }),
+  borderRadius: PropType.vec4({ script: true, mutable: true }),
+
   parent: PropType.selfRef({ backRef: true }),
   firstChild: PropType.selfRef(),
   prevSibling: PropType.selfRef({ backRef: true }),
   nextSibling: PropType.selfRef(),
+
+  text: PropType.ref(UITextResource, { mutable: false }),
+  button: PropType.ref(UIButtonResource, { mutable: false }),
+  image: PropType.ref(UIImageResource, { mutable: false }),
+});
+
+export const UICanvasResource = defineResource("ui-canvas", ResourceType.UICanvas, {
+  name: PropType.string({ default: "UICanvas", script: true }),
+  root: PropType.ref(UIElementResource),
+  size: PropType.vec2({ script: true, mutable: true }),
+  width: PropType.f32({ script: true, mutable: true }),
+  height: PropType.f32({ script: true, mutable: true }),
+  redraw: PropType.u32({ default: 1, script: true, mutable: true }),
+});
+
+export enum ColliderType {
+  Box,
+  Sphere,
+  Capsule,
+  Cylinder,
+  Hull,
+  Trimesh,
+}
+
+export const ColliderResource = defineResource("collider", ResourceType.Collider, {
+  name: PropType.string({ default: "Collider", script: true }),
+  type: PropType.enum(ColliderType, { required: true, mutable: false }),
+  activeEvents: PropType.enum(RAPIER.ActiveEvents, { default: 0, mutable: false }),
+  collisionGroups: PropType.u32({ mutable: false }),
+  offset: PropType.vec3({ mutable: false }),
+  restitution: PropType.f32({ mutable: false }),
+  density: PropType.f32({ mutable: false }),
+  isTrigger: PropType.bool({ mutable: false }),
+  size: PropType.vec3({ mutable: false }),
+  radius: PropType.f32({ mutable: false }),
+  height: PropType.f32({ mutable: false }),
+  mesh: PropType.ref(MeshResource, { mutable: false }),
+});
+
+export enum PhysicsBodyType {
+  Static,
+  Kinematic,
+  Rigid,
+}
+
+export const PhysicsBodyResource = defineResource("physics-body", ResourceType.PhysicsBody, {
+  type: PropType.enum(PhysicsBodyType, { required: true, mutable: false }),
+  mass: PropType.f32({ min: 0 }),
+  linearVelocity: PropType.vec3(),
+  angularVelocity: PropType.vec3(),
+  inertiaTensor: PropType.mat3(),
+});
+
+export const NodeResource = defineResource("node", ResourceType.Node, {
+  name: PropType.string({ default: "Node", script: true }),
+  parentScene: PropType.ref("scene", { backRef: true, editor: false }),
+  parent: PropType.selfRef({ backRef: true, editor: false }),
+  firstChild: PropType.selfRef({ editor: false }),
+  prevSibling: PropType.selfRef({ backRef: true, editor: false }),
+  nextSibling: PropType.selfRef({ editor: false }),
   position: PropType.vec3({ script: true }),
   quaternion: PropType.quat({ script: true }),
   scale: PropType.vec3({ script: true, default: [1, 1, 1] }),
-  localMatrix: PropType.mat4({ script: true }),
-  worldMatrix: PropType.mat4({ script: true }),
+  localMatrix: PropType.mat4({ script: true, editor: false }),
+  worldMatrix: PropType.mat4({ script: true, editor: false }),
   worldMatrixNeedsUpdate: PropType.bool({ script: true, default: true }),
   visible: PropType.bool({ script: true, default: true }),
   enabled: PropType.bool({ script: true, default: true }),
-  skipLerp: PropType.u32({ script: true, default: 0 }),
+  skipLerp: PropType.i32({ script: true, default: 10, editor: false }),
   isStatic: PropType.bool({ script: true, default: false }),
   layers: PropType.bitmask({ default: 1, script: true }),
   mesh: PropType.ref(MeshResource, { script: true }),
@@ -445,6 +700,11 @@ export const NodeResource = defineResource("node", ResourceType.Node, {
   tilesRenderer: PropType.ref(TilesRendererResource, { script: true }),
   nametag: PropType.ref(NametagResource, { script: false }),
   interactable: PropType.ref(InteractableResource, { script: true }),
+  uiCanvas: PropType.ref(UICanvasResource, { script: true }),
+  collider: PropType.ref(ColliderResource, { script: true }),
+  physicsBody: PropType.ref(PhysicsBodyResource, { script: true }),
+  castShadow: PropType.bool({ default: true, script: true }),
+  receiveShadow: PropType.bool({ default: true, script: true }),
 });
 
 export enum AnimationSamplerInterpolation {

@@ -1,18 +1,15 @@
-import { ourPlayerQuery } from "../component/Player";
-import { GameState } from "../GameTypes";
-import { defineModule, getModule, registerMessageHandler, Thread } from "../module/module.common";
+import { ourPlayerQuery } from "../player/Player";
+import { GameContext } from "../GameTypes";
+import { defineModule, getModule, Thread } from "../module/module.common";
+import { getCamera } from "../player/getCamera";
 import { XRMode } from "../renderer/renderer.common";
-import { removeObjectFromWorld } from "../resource/RemoteResources";
-import { tryGetRemoteResource } from "../resource/resource.game";
-import { createDisposables } from "../utils/createDisposables";
+import { getXRMode } from "../renderer/renderer.game";
+import { RemoteNode } from "../resource/RemoteResources";
+import { getRemoteResource, tryGetRemoteResource } from "../resource/resource.game";
+import { ActionMap, ActionState } from "./ActionMap";
 import { enableActionMap } from "./ActionMappingSystem";
-import {
-  InitializeInputStateMessage,
-  InputMessageType,
-  SharedXRInputSource,
-  UpdateXRInputSourcesMessage,
-} from "./input.common";
-import { InputController, createInputController, InputControllerComponent } from "./InputController";
+import { InitializeInputStateMessage, InputMessageType } from "./input.common";
+import { InputRingBuffer } from "../common/InputRingBuffer";
 import { ARActionMap, XRAvatarRig } from "./WebXRAvatarRigSystem";
 
 /*********
@@ -20,20 +17,17 @@ import { ARActionMap, XRAvatarRig } from "./WebXRAvatarRigSystem";
  ********/
 
 export interface GameInputModule {
-  controllers: Map<number, InputController>;
-  defaultController: InputController;
-  activeController: InputController;
-  xrInputSources: Map<number, SharedXRInputSource>;
-  xrInputSourcesByHand: Map<XRHandedness, SharedXRInputSource>;
-  xrPrimaryHand: XRHandedness;
-  prevXRMode: XRMode;
+  inputRingBuffer: InputRingBuffer;
+  actionStates: Map<string, ActionState>;
+  actionMaps: ActionMap[];
+  raw: { [path: string]: number };
 }
 
 /******************
  * Initialization *
  *****************/
 
-export const InputModule = defineModule<GameState, GameInputModule>({
+export const InputModule = defineModule<GameContext, GameInputModule>({
   name: "input",
   async create(ctx, { waitForMessage }) {
     const { inputRingBuffer } = await waitForMessage<InitializeInputStateMessage>(
@@ -41,80 +35,29 @@ export const InputModule = defineModule<GameState, GameInputModule>({
       InputMessageType.InitializeInputState
     );
 
-    const controller = createInputController({ inputRingBuffer });
-
     return {
-      controllers: InputControllerComponent,
-      defaultController: controller,
-      activeController: controller,
-      xrInputSources: new Map(),
-      xrPrimaryHand: "right",
-      xrInputSourcesByHand: new Map(),
-      prevXRMode: XRMode.None,
+      inputRingBuffer,
+      actionMaps: [],
+      actionStates: new Map(),
+      raw: {},
     };
   },
   init(ctx) {
-    // TODO: we should enable / disable this depending on whether or not you're in XR
     const input = getModule(ctx, InputModule);
-    const controller = input.defaultController;
-    enableActionMap(controller, ARActionMap);
-
-    return createDisposables([
-      registerMessageHandler(ctx, InputMessageType.UpdateXRInputSources, onUpdateXRInputSources),
-    ]);
+    // TODO: we should enable / disable this depending on whether or not you're in XR
+    enableActionMap(input, ARActionMap);
   },
 });
 
-function onUpdateXRInputSources(ctx: GameState, { added, removed }: UpdateXRInputSourcesMessage) {
-  const { xrInputSources, xrInputSourcesByHand } = getModule(ctx, InputModule);
+export function getPrimaryInputSourceNode(ctx: GameContext) {
+  const ourPlayer = ourPlayerQuery(ctx.world)[0];
+  const xrRig = getXRMode(ctx) !== XRMode.None ? XRAvatarRig.get(ourPlayer) : undefined;
+  const rightRayNode = xrRig && xrRig.rightRayEid && tryGetRemoteResource<RemoteNode>(ctx, xrRig.rightRayEid);
 
-  for (const id of removed) {
-    const inputSource = xrInputSources.get(id);
-
-    if (inputSource) {
-      xrInputSourcesByHand.delete(inputSource.handedness);
-      xrInputSources.delete(id);
-
-      const ourPlayer = ourPlayerQuery(ctx.world)[0];
-      const xrRig = XRAvatarRig.get(ourPlayer);
-      if (xrRig) {
-        if (inputSource.handedness === "left") {
-          if (xrRig.leftNetworkedEid) removeObjectFromWorld(ctx, tryGetRemoteResource(ctx, xrRig.leftNetworkedEid));
-          if (xrRig.leftRayNetworkedEid)
-            removeObjectFromWorld(ctx, tryGetRemoteResource(ctx, xrRig.leftRayNetworkedEid));
-
-          xrRig.leftControllerEid = 0;
-          xrRig.leftNetworkedEid = 0;
-          xrRig.leftRayNetworkedEid = 0;
-        } else if (inputSource.handedness === "right") {
-          if (xrRig.rightNetworkedEid) removeObjectFromWorld(ctx, tryGetRemoteResource(ctx, xrRig.rightNetworkedEid));
-          if (xrRig.rightRayNetworkedEid)
-            removeObjectFromWorld(ctx, tryGetRemoteResource(ctx, xrRig.rightRayNetworkedEid));
-
-          xrRig.rightControllerEid = 0;
-          xrRig.rightNetworkedEid = 0;
-          xrRig.rightRayNetworkedEid = 0;
-        }
-      }
-    }
-  }
-
-  for (const item of added) {
-    xrInputSources.set(item.id, item);
-    xrInputSourcesByHand.set(item.handedness, item);
-  }
-}
-
-/**********
- * System *
- **********/
-
-export function ResetInputSystem(ctx: GameState) {
-  const input = getModule(ctx, InputModule);
-  for (const controller of input.controllers.values()) {
-    const { raw } = controller;
-    raw["Mouse/movementX"] = 0;
-    raw["Mouse/movementY"] = 0;
-    raw["Mouse/Scroll"] = 0;
+  if (rightRayNode) {
+    return rightRayNode;
+  } else {
+    const playerNode = getRemoteResource<RemoteNode>(ctx, ourPlayer) as RemoteNode;
+    return getCamera(ctx, playerNode).parent as RemoteNode;
   }
 }

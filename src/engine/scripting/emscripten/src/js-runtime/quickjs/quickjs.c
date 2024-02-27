@@ -4905,6 +4905,11 @@ static int JS_SetObjectData(JSContext *ctx, JSValueConst obj, JSValue val)
     return -1;
 }
 
+int JS_GetClassID(JSValue obj)
+{
+    return JS_VALUE_GET_OBJ(obj)->class_id;
+}
+
 JSValue JS_NewObjectClass(JSContext *ctx, int class_id)
 {
     return JS_NewObjectProtoClass(ctx, ctx->class_proto[class_id], class_id);
@@ -9802,6 +9807,16 @@ void *JS_GetOpaque(JSValueConst obj, JSClassID class_id)
     p = JS_VALUE_GET_OBJ(obj);
     if (p->class_id != class_id)
         return NULL;
+    return p->u.opaque;
+}
+
+// ThirdRoom: Added for polymorphic access
+void *JS_GetOpaque_UNSAFE(JSValueConst obj)
+{
+    JSObject *p;
+    if (JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT)
+        return NULL;
+    p = JS_VALUE_GET_OBJ(obj);
     return p->u.opaque;
 }
 

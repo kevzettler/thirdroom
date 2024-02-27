@@ -1,8 +1,12 @@
+import { Node } from "yoga-wasm-web";
+import { CanvasTexture } from "three";
+
 import { AudioModule } from "../audio/audio.main";
-import { IMainThreadContext } from "../MainThread";
+import { MainContext } from "../MainThread";
 import { getModule } from "../module/module.common";
 import { defineLocalResourceClass } from "./LocalResourceClass";
 import { createLocalResourceModule, LoadStatus, ResourceId } from "./resource.common";
+import { ILocalResourceConstructor } from "./ResourceDefinition";
 import {
   AccessorComponentType,
   AccessorResource,
@@ -17,6 +21,7 @@ import {
   BufferResource,
   BufferViewResource,
   CameraResource,
+  ColliderResource,
   EnvironmentResource,
   ImageResource,
   InstancedMeshResource,
@@ -28,6 +33,7 @@ import {
   MeshResource,
   NametagResource,
   NodeResource,
+  PhysicsBodyResource,
   ReflectionProbeResource,
   ResourceType,
   SamplerResource,
@@ -36,6 +42,11 @@ import {
   SparseAccessorResource,
   TextureResource,
   TilesRendererResource,
+  UIButtonResource,
+  UICanvasResource,
+  UIElementResource,
+  UIImageResource,
+  UITextResource,
   WorldResource,
 } from "./schema";
 
@@ -49,16 +60,18 @@ export {
   ReturnRecycledResourcesSystem,
 };
 
+export type MainThreadResource = ILocalResourceConstructor<MainContext>;
+
 export class MainNametag extends defineLocalResourceClass(NametagResource) {
   declare resourceType: ResourceType.Nametag;
 
-  load(ctx: IMainThreadContext) {
+  load(ctx: MainContext) {
     const audioModule = getModule(ctx, AudioModule);
     const nametags = getLocalResources(ctx, MainNametag);
     audioModule.eventEmitter.emit("nametags-changed", [...nametags, this]);
   }
 
-  dispose(ctx: IMainThreadContext): void {
+  dispose(ctx: MainContext): void {
     super.dispose(ctx);
     const audioModule = getModule(ctx, AudioModule);
     const nametags = getLocalResources(ctx, MainNametag);
@@ -114,7 +127,7 @@ export class MainAudioEmitter extends defineLocalResourceClass(AudioEmitterResou
   outputGain: GainNode | undefined;
   destination: AudioNode | undefined;
 
-  load(ctx: IMainThreadContext) {
+  load(ctx: MainContext) {
     const audioModule = getModule(ctx, AudioModule);
     const audioContext = audioModule.context;
 
@@ -215,6 +228,41 @@ export class MainSkin extends defineLocalResourceClass(SkinResource) {
 
 export class MainInteractable extends defineLocalResourceClass(InteractableResource) {}
 
+export class MainUIText extends defineLocalResourceClass(UITextResource) {}
+export class MainUIButton extends defineLocalResourceClass(UIButtonResource) {}
+export class MainUIImage extends defineLocalResourceClass(UIImageResource) {
+  declare source: MainImage;
+  declare alt: string;
+
+  domElement?: HTMLImageElement;
+}
+
+export class MainUIElement extends defineLocalResourceClass(UIElementResource) {
+  declare parent: MainUIElement | undefined;
+  declare firstChild: MainUIElement | undefined;
+  declare prevSibling: MainUIElement | undefined;
+  declare nextSibling: MainUIElement | undefined;
+
+  declare text: MainUIText;
+  declare button: MainUIButton;
+  declare image: MainUIImage;
+
+  yogaNode?: Node;
+}
+
+export class MainUICanvas extends defineLocalResourceClass(UICanvasResource) {
+  declare root: MainUIElement;
+
+  canvasTexture?: CanvasTexture;
+  canvas?: HTMLCanvasElement;
+  yogaNode?: Node;
+}
+export class MainCollider extends defineLocalResourceClass(ColliderResource) {
+  declare mesh: MainMesh | undefined;
+}
+
+export class MainPhysicsBody extends defineLocalResourceClass(PhysicsBodyResource) {}
+
 export class MainNode extends defineLocalResourceClass(NodeResource) {
   declare resourceType: ResourceType.Node;
   declare parentScene: MainScene | undefined;
@@ -233,6 +281,10 @@ export class MainNode extends defineLocalResourceClass(NodeResource) {
   declare tilesRenderer: MainTilesRenderer | undefined;
   declare nametag: MainNametag | undefined;
   declare interactable: MainInteractable | undefined;
+  declare uiCanvas: MainUICanvas | undefined;
+
+  declare collider: MainCollider | undefined;
+  declare physicsBody: MainPhysicsBody | undefined;
   currentAudioEmitterResourceId = 0;
   emitterInputNode?: GainNode;
   emitterPannerNode?: PannerNode;
@@ -296,8 +348,13 @@ const {
   registerResourceLoader,
   ResourceLoaderSystem,
   ReturnRecycledResourcesSystem,
-} = createLocalResourceModule<IMainThreadContext>([
+} = createLocalResourceModule<MainContext>([
   MainNode,
+  MainUIButton,
+  MainUICanvas,
+  MainUIElement,
+  MainUIImage,
+  MainUIText,
   MainAudioData,
   MainAudioSource,
   MainAudioEmitter,
@@ -314,6 +371,8 @@ const {
   MainScene,
   MainMeshPrimitive,
   MainInteractable,
+  MainCollider,
+  MainPhysicsBody,
   MainAccessor,
   MainSparseAccessor,
   MainSkin,

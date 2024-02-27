@@ -119,49 +119,49 @@ export const writeScalarPropIfChanged = (
 };
 
 export const writeFloat64 = (v: CursorView, value: number) => {
-  v.setFloat64(v.cursor, value);
+  v.setFloat64(v.cursor, value, v.littleEndian);
   v.cursor += Float64Array.BYTES_PER_ELEMENT;
   return v;
 };
 
 export const writeFloat32 = (v: CursorView, value: number) => {
-  v.setFloat32(v.cursor, value);
+  v.setFloat32(v.cursor, value, v.littleEndian);
   v.cursor += Float32Array.BYTES_PER_ELEMENT;
   return v;
 };
 
 export const writeUint64 = (v: CursorView, value: number) => {
-  v.setUint64(v.cursor, value);
+  v.setUint64(v.cursor, value, v.littleEndian);
   v.cursor += BigUint64Array.BYTES_PER_ELEMENT;
   return v;
 };
 
 export const writeInt64 = (v: CursorView, value: number) => {
-  v.setInt64(v.cursor, value);
+  v.setInt64(v.cursor, value, v.littleEndian);
   v.cursor += BigInt64Array.BYTES_PER_ELEMENT;
   return v;
 };
 
 export const writeUint32 = (v: CursorView, value: number) => {
-  v.setUint32(v.cursor, value);
+  v.setUint32(v.cursor, value, v.littleEndian);
   v.cursor += Uint32Array.BYTES_PER_ELEMENT;
   return v;
 };
 
 export const writeInt32 = (v: CursorView, value: number) => {
-  v.setInt32(v.cursor, value);
+  v.setInt32(v.cursor, value, v.littleEndian);
   v.cursor += Int32Array.BYTES_PER_ELEMENT;
   return v;
 };
 
 export const writeUint16 = (v: CursorView, value: number) => {
-  v.setUint16(v.cursor, value);
+  v.setUint16(v.cursor, value, v.littleEndian);
   v.cursor += Uint16Array.BYTES_PER_ELEMENT;
   return v;
 };
 
 export const writeInt16 = (v: CursorView, value: number) => {
-  v.setInt16(v.cursor, value);
+  v.setInt16(v.cursor, value, v.littleEndian);
   v.cursor += Int16Array.BYTES_PER_ELEMENT;
   return v;
 };
@@ -192,7 +192,7 @@ export const spaceFloat64 = (v: CursorView) => {
   const savePoint = v.cursor;
   v.cursor += Float64Array.BYTES_PER_ELEMENT;
   return (value: number) => {
-    v.setFloat64(savePoint, value);
+    v.setFloat64(savePoint, value, v.littleEndian);
     return v;
   };
 };
@@ -201,7 +201,7 @@ export const spaceFloat32 = (v: CursorView) => {
   const savePoint = v.cursor;
   v.cursor += Float32Array.BYTES_PER_ELEMENT;
   return (value: number) => {
-    v.setFloat32(savePoint, value);
+    v.setFloat32(savePoint, value, v.littleEndian);
     return v;
   };
 };
@@ -210,7 +210,7 @@ export const spaceUint64 = (v: CursorView) => {
   const savePoint = v.cursor;
   v.cursor += BigUint64Array.BYTES_PER_ELEMENT;
   return (value: number) => {
-    v.setUint64(savePoint, value);
+    v.setUint64(savePoint, value, v.littleEndian);
     return v;
   };
 };
@@ -219,7 +219,7 @@ export const spaceInt64 = (v: CursorView) => {
   const savePoint = v.cursor;
   v.cursor += BigInt64Array.BYTES_PER_ELEMENT;
   return (value: number) => {
-    v.setInt64(savePoint, value);
+    v.setInt64(savePoint, value, v.littleEndian);
     return v;
   };
 };
@@ -228,7 +228,7 @@ export const spaceUint32 = (v: CursorView) => {
   const savePoint = v.cursor;
   v.cursor += Uint32Array.BYTES_PER_ELEMENT;
   return (value: number) => {
-    v.setUint32(savePoint, value);
+    v.setUint32(savePoint, value, v.littleEndian);
     return v;
   };
 };
@@ -237,7 +237,7 @@ export const spaceInt32 = (v: CursorView) => {
   const savePoint = v.cursor;
   v.cursor += Int32Array.BYTES_PER_ELEMENT;
   return (value: number) => {
-    v.setInt32(savePoint, value);
+    v.setInt32(savePoint, value, v.littleEndian);
     return v;
   };
 };
@@ -246,7 +246,7 @@ export const spaceUint16 = (v: CursorView) => {
   const savePoint = v.cursor;
   v.cursor += Uint16Array.BYTES_PER_ELEMENT;
   return (value: number) => {
-    v.setUint16(savePoint, value);
+    v.setUint16(savePoint, value, v.littleEndian);
     return v;
   };
 };
@@ -255,7 +255,7 @@ export const spaceInt16 = (v: CursorView) => {
   const savePoint = v.cursor;
   v.cursor += Int16Array.BYTES_PER_ELEMENT;
   return (value: number) => {
-    v.setInt16(savePoint, value);
+    v.setInt16(savePoint, value, v.littleEndian);
     return v;
   };
 };
@@ -306,6 +306,26 @@ export const readFloat32 = (v: CursorView) => {
   return val;
 };
 
+export const readFloat32Array = (v: CursorView, length: number) => {
+  if (!v.littleEndian) {
+    throw new Error("Cannot use readFloat32Array with non little endian cursor view");
+  }
+
+  const arr = new Float32Array(v.buffer, v.cursor, length);
+  v.cursor += arr.byteLength;
+  return arr;
+};
+
+export const readFloat32List = (v: CursorView) => {
+  const rewind = rewindCursorView(v);
+  const itemsPtr = readUint32(v);
+  const count = readUint32(v);
+  moveCursorView(v, itemsPtr);
+  const arr = readFloat32Array(v, count);
+  rewind();
+  return arr;
+};
+
 export const readUint64 = (v: CursorView) => {
   const val = v.getBigUint64(v.cursor, v.littleEndian);
   v.cursor += BigUint64Array.BYTES_PER_ELEMENT;
@@ -322,6 +342,26 @@ export const readUint32 = (v: CursorView) => {
   const val = v.getUint32(v.cursor, v.littleEndian);
   v.cursor += Uint32Array.BYTES_PER_ELEMENT;
   return val;
+};
+
+export const readUint32Array = (v: CursorView, length: number) => {
+  if (!v.littleEndian) {
+    throw new Error("Cannot use readUint32Array with non little endian cursor view");
+  }
+
+  const arr = new Uint32Array(v.buffer, v.cursor, length);
+  v.cursor += arr.byteLength;
+  return arr;
+};
+
+export const readUint32List = (v: CursorView) => {
+  const itemsPtr = readUint32(v);
+  const count = readUint32(v);
+  const rewind = rewindCursorView(v);
+  moveCursorView(v, itemsPtr);
+  const arr = readUint32Array(v, count);
+  rewind();
+  return arr;
 };
 
 export const readInt32 = (v: CursorView) => {
@@ -355,8 +395,8 @@ export const readInt8 = (v: CursorView) => {
 };
 
 const textDecoder = new TextDecoder();
-export function readString(v: CursorView) {
-  const byteLength = readUint8(v);
+export function readString(v: CursorView, byteLength?: number) {
+  byteLength = byteLength || readUint8(v);
   const encodedString = new Uint8Array(v.buffer, v.cursor, byteLength);
   v.cursor += byteLength;
   return textDecoder.decode(encodedString);
@@ -376,5 +416,10 @@ export const skipUint8 = (v: CursorView) => {
 
 export const skipUint32 = (v: CursorView) => {
   v.cursor += Uint32Array.BYTES_PER_ELEMENT;
+  return v;
+};
+
+export const skipBytes = (v: CursorView, byteLength: number) => {
+  v.cursor += byteLength;
   return v;
 };

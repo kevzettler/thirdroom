@@ -1,6 +1,8 @@
 #!/bin/bash
 
-QUICKJS_ROOT=include/quickjs
+cd $(dirname $0)
+
+QUICKJS_ROOT=src/js-runtime/quickjs
 QUICKJS_CONFIG_VERSION=$(cat $QUICKJS_ROOT/VERSION)
 
 emcc \
@@ -17,4 +19,10 @@ emcc \
   -DCONFIG_VERSION=\"$QUICKJS_CONFIG_VERSION\" \
   -DCONFIG_STACK_CHECK \
   src/js-runtime/*.c \
-  src/js-runtime/quickjs/{quickjs,cutils,libregexp,libunicode}.c
+  src/js-runtime/global/*.c \
+  src/js-runtime/matrix/*.c \
+  src/js-runtime/quickjs/{quickjs,cutils,libregexp,libunicode}.c \
+  src/js-runtime/thirdroom/*.c \
+  src/js-runtime/utils/*.c \
+  src/js-runtime/websg/*.c \
+  src/js-runtime/websg-networking/*.c

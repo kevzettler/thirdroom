@@ -1,9 +1,10 @@
-import { addComponent, defineComponent, hasComponent } from "bitecs";
+import { defineQuery, enterQuery } from "bitecs";
 import { AnimationClip } from "three";
+import RAPIER from "@dimforge/rapier3d-compat";
 
-import { addChild, getLastSibling } from "../component/transform";
-import { GameState } from "../GameTypes";
-import { defineRemoteResourceClass } from "./RemoteResourceClass";
+import { getLastSibling } from "../component/transform";
+import { GameContext, RemoteResourceManager } from "../GameTypes";
+import { defineRemoteResourceClass, InitialRemoteResourceProps } from "./RemoteResourceClass";
 import {
   NametagResource,
   SamplerResource,
@@ -34,7 +35,17 @@ import {
   AnimationSamplerResource,
   WorldResource,
   EnvironmentResource,
+  UIButtonResource,
+  UICanvasResource,
+  UIElementResource,
+  UIImageResource,
+  UITextResource,
+  ColliderResource,
+  PhysicsBodyResource,
 } from "./schema";
+import { getModule } from "../module/module.common";
+import { PhysicsModule } from "../physics/physics.game";
+import { removeResourceRef } from "./resource.game";
 
 export class RemoteNametag extends defineRemoteResourceClass(NametagResource) {}
 
@@ -122,6 +133,60 @@ export class RemoteSkin extends defineRemoteResourceClass(SkinResource) {
 
 export class RemoteInteractable extends defineRemoteResourceClass(InteractableResource) {}
 
+export class RemoteUIText extends defineRemoteResourceClass(UITextResource) {}
+export class RemoteUIButton extends defineRemoteResourceClass(UIButtonResource) {}
+export class RemoteUIImage extends defineRemoteResourceClass(UIImageResource) {}
+
+export class RemoteUIElement extends defineRemoteResourceClass(UIElementResource) {
+  declare parent: RemoteUIElement | undefined;
+  declare firstChild: RemoteUIElement | undefined;
+  declare prevSibling: RemoteUIElement | undefined;
+  declare nextSibling: RemoteUIElement | undefined;
+
+  declare text: RemoteUIText;
+  declare button: RemoteUIButton;
+  declare image: RemoteUIImage;
+}
+export class RemoteUICanvas extends defineRemoteResourceClass(UICanvasResource) {
+  declare root: RemoteUIElement;
+}
+export class RemoteCollider extends defineRemoteResourceClass(ColliderResource) {
+  declare mesh: RemoteMesh | undefined;
+}
+
+export class RemotePhysicsBody extends defineRemoteResourceClass(PhysicsBodyResource) {
+  velocity: Float32Array = new Float32Array(3);
+  body?: RAPIER.RigidBody;
+  mesh?: RemoteMesh;
+  primitive?: RemoteMeshPrimitive;
+
+  dispose() {
+    const physics = getModule(this.manager.ctx, PhysicsModule);
+
+    if (this.body) {
+      for (let i = 0; i < this.body.numColliders(); i++) {
+        const collider = this.body.collider(i);
+        physics.handleToEid.delete(collider.handle);
+      }
+
+      physics.physicsWorld.removeRigidBody(this.body);
+    }
+
+    if (this.mesh) {
+      removeResourceRef(this.manager.ctx, this.mesh.eid);
+    }
+
+    if (this.primitive) {
+      removeResourceRef(this.manager.ctx, this.primitive.eid);
+    }
+  }
+}
+
+export const physicsBodyQuery = defineQuery([RemotePhysicsBody]);
+export const enteredPhysicsBodyQuery = enterQuery(physicsBodyQuery);
+
+const NodeIsStaticOffset = NodeResource.schema.isStatic.byteOffset / 4;
+
 export class RemoteNode extends defineRemoteResourceClass(NodeResource) {
   declare parentScene: RemoteScene | undefined;
   declare parent: RemoteNode | undefined;
@@ -139,6 +204,25 @@ export class RemoteNode extends defineRemoteResourceClass(NodeResource) {
   declare tilesRenderer: RemoteTilesRenderer | undefined;
   declare nametag: RemoteNametag | undefined;
   declare interactable: RemoteInteractable | undefined;
+  declare uiCanvas: RemoteUICanvas | undefined;
+  declare collider: RemoteCollider | undefined;
+  declare physicsBody: RemotePhysicsBody | undefined;
+
+  constructor(
+    manager: RemoteResourceManager,
+    initialProps?: InitialRemoteResourceProps<(typeof RemoteNode)["resourceDef"]>
+  ) {
+    super(manager, initialProps);
+    manager.nodeIdToComponentStoreIndex.set(this.eid, manager.nextComponentStoreIndex++);
+  }
+
+  get isStatic() {
+    return !this.manager.ctx.editorLoaded && this.u32View[NodeIsStaticOffset] === 1;
+  }
+
+  set isStatic(value: boolean) {
+    this.u32View[NodeIsStaticOffset] = value ? 1 : 0;
+  }
 }
 
 export class RemoteAnimationSampler extends defineRemoteResourceClass(AnimationSamplerResource) {
@@ -179,13 +263,7 @@ export class RemoteWorld extends defineRemoteResourceClass(WorldResource) {
   declare activeRightControllerNode: RemoteNode | undefined;
 }
 
-export const RemoteObject = defineComponent();
-
-export function addObjectToWorld(ctx: GameState, object: RemoteNode) {
-  if (!hasComponent(ctx.world, RemoteObject, object.eid)) {
-    throw new Error(`Node is not a RemoteObject`);
-  }
-
+export function addObjectToWorld(ctx: GameContext, object: RemoteNode) {
   const worldResource = ctx.worldResource;
   const firstNode = worldResource.firstNode;
 
@@ -198,11 +276,7 @@ export function addObjectToWorld(ctx: GameState, object: RemoteNode) {
   }
 }
 
-export function removeObjectFromWorld(ctx: GameState, object: RemoteNode) {
-  if (!hasComponent(ctx.world, RemoteObject, object.eid)) {
-    throw new Error(`Node is not a RemoteObject`);
-  }
-
+export function removeObjectFromWorld(ctx: GameContext, object: RemoteNode) {
   object.addRef();
 
   const worldResource = ctx.worldResource;
@@ -235,20 +309,4 @@ export function removeObjectFromWorld(ctx: GameState, object: RemoteNode) {
   object.firstChild = undefined;
 
   object.removeRef();
-}
-
-export function createRemoteObject(ctx: GameState, publicRoot: RemoteNode, privateRoot?: RemoteNode) {
-  const root = new RemoteNode(ctx.resourceManager);
-  addComponent(ctx.world, RemoteObject, root.eid);
-  addChild(root, privateRoot || new RemoteNode(ctx.resourceManager, { name: "Private Root" }));
-  addChild(root, publicRoot);
-  return root;
-}
-
-export function getObjectPrivateRoot(root: RemoteNode): RemoteNode {
-  return root.firstChild!;
-}
-
-export function getObjectPublicRoot(root: RemoteNode): RemoteNode {
-  return root.firstChild!.nextSibling!;
 }

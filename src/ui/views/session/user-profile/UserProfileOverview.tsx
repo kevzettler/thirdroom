@@ -1,9 +1,9 @@
-import { useState, ChangeEvent, FormEvent } from "react";
+import { useState, ChangeEvent, FormEvent, useMemo } from "react";
+import { useAtomValue, useSetAtom } from "jotai";
 
 import { Content } from "../../../atoms/content/Content";
 import { WindowContent } from "../../components/window/WindowContent";
 import { useHydrogen } from "../../../hooks/useHydrogen";
-import { useStore } from "../../../hooks/useStore";
 import { Scroll } from "../../../atoms/scroll/Scroll";
 import { SettingTile } from "../../components/setting-tile/SettingTile";
 import { Input } from "../../../atoms/input/Input";
@@ -24,18 +24,35 @@ import { useFilePicker } from "../../../hooks/useFilePicker";
 import { uploadAttachment } from "../../../utils/matrixUtils";
 import { Switch } from "../../../atoms/button/Switch";
 import { useLocalStorage } from "../../../hooks/useLocalStorage";
+import { SelectInput } from "../../components/property-panel/SelectInput";
+import {
+  LOCAL_STORAGE_RENDER_QUALITY,
+  RenderQualityOptions,
+  RenderQualitySetting,
+  RenderQualityToSetting,
+} from "../../../../engine/renderer/renderer.common";
+import { useMainThreadContext } from "../../../hooks/useMainThread";
+import { OverlayWindow, overlayWindowAtom } from "../../../state/overlayWindow";
+import { userProfileAtom } from "../../../state/userProfile";
 
 export function UserProfileOverview() {
   const { session, platform, profileRoom } = useHydrogen(true);
-  const { displayName, avatarUrl } = useStore((state) => state.userProfile);
-  const { closeWindow } = useStore((state) => state.overlayWindow);
+  const { displayName, avatarUrl } = useAtomValue(userProfileAtom);
+  const setOverlayWindow = useSetAtom(overlayWindowAtom);
 
   const [newDisplayName, setNewDisplayName] = useState(displayName);
-  const [authoritativeNetworking, setAuthNetworking] = useState(
-    localStorage.getItem("authoritativeNetworking") === "true"
-  );
-  const [discoverPage, setDiscoverPage] = useLocalStorage("feature_discoverPage", false);
   const [immersiveAR, setImmersiveAR] = useLocalStorage("feature_immersiveAR", false);
+  const [renderQuality, setRenderQuality] = useLocalStorage(LOCAL_STORAGE_RENDER_QUALITY, RenderQualitySetting.Auto);
+  const [sceneEditor, setSceneEditor] = useLocalStorage("feature_sceneEditor", false);
+
+  const mainThread = useMainThreadContext();
+
+  const renderQualityOptions = useMemo(() => {
+    const currentQuality = RenderQualityOptions.find(
+      (option) => option.value === RenderQualityToSetting[mainThread.quality]
+    );
+    return [{ value: RenderQualitySetting.Auto, label: `Auto (${currentQuality?.label})` }, ...RenderQualityOptions];
+  }, [mainThread.quality]);
 
   const [, tDAvatarPreviewUrl] = use3DAvatar(profileRoom);
 
@@ -58,14 +75,9 @@ export function UserProfileOverview() {
     debounceDisplayNameChange(name);
   };
 
-  const onAuthoritativeNetworkingChange = (checked: boolean) => {
-    setAuthNetworking(checked);
-    localStorage.setItem("authoritativeNetworking", checked.toString());
-  };
-
   const handleSubmit = async (evt: FormEvent<HTMLFormElement>) => {
     evt.preventDefault();
-    closeWindow();
+    setOverlayWindow({ type: OverlayWindow.None });
     const name = evt.currentTarget.displayName.value.trim() as string;
     if (name !== displayName && name !== "") {
       session.hsApi.setProfileDisplayName(session.userId, name);
@@ -81,7 +93,7 @@ export function UserProfileOverview() {
   const handleReset = () => {
     setNewDisplayName(displayName);
     resetAvatarUses();
-    closeWindow();
+    setOverlayWindow({ type: OverlayWindow.None });
   };
 
   return (
@@ -103,21 +115,8 @@ export function UserProfileOverview() {
                   <span className="grow basis-0" />
                 </div>
                 <div className="flex gap-lg">
-                  <SettingTile
-                    className="grow basis-0"
-                    label={<Label>Authoritative Networking (EXPERIMENTAL, REQUIRES REFRESH)</Label>}
-                  >
-                    <Switch
-                      checked={authoritativeNetworking}
-                      onCheckedChange={onAuthoritativeNetworkingChange}
-                      defaultChecked={authoritativeNetworking}
-                    />
-                  </SettingTile>
-                  <span className="grow basis-0" />
-                </div>
-                <div className="flex gap-lg">
-                  <SettingTile className="grow basis-0" label={<Label>Discover Page (REQUIRES REFRESH)</Label>}>
-                    <Switch checked={discoverPage} onCheckedChange={setDiscoverPage} />
+                  <SettingTile className="grow basis-0" label={<Label>Graphics Quality (REQUIRES REFRESH)</Label>}>
+                    <SelectInput options={renderQualityOptions} value={renderQuality} onChange={setRenderQuality} />
                   </SettingTile>
                   <span className="grow basis-0" />
                 </div>
@@ -127,6 +126,15 @@ export function UserProfileOverview() {
                     label={<Label>Immersive AR (EXPERIMENTAL, REQUIRES REFRESH)</Label>}
                   >
                     <Switch checked={immersiveAR} onCheckedChange={setImmersiveAR} />
+                  </SettingTile>
+                  <span className="grow basis-0" />
+                </div>
+                <div className="flex gap-lg">
+                  <SettingTile
+                    className="grow basis-0"
+                    label={<Label>Scene Editor (EXPERIMENTAL, REQUIRES REFRESH)</Label>}
+                  >
+                    <Switch checked={sceneEditor} onCheckedChange={setSceneEditor} />
                   </SettingTile>
                   <span className="grow basis-0" />
                 </div>

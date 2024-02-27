@@ -1,4 +1,4 @@
-import { GameState } from "../GameTypes";
+import { GameContext } from "../GameTypes";
 import { Thread } from "../module/module.common";
 
 export const FetchProgressMessageType = "fetch-progress-message";
@@ -8,17 +8,17 @@ export interface FetchProgressMessage {
   status: { loaded: number; total: number };
 }
 
-function reportStatus(ctx: GameState, status: { loaded: number; total: number }) {
+function reportStatus(ctx: GameContext, status: { loaded: number; total: number }) {
   ctx.sendMessage<FetchProgressMessage>(Thread.Main, {
     type: FetchProgressMessageType,
     status,
   });
 }
 
-export async function fetchWithProgress(ctx: GameState, url: string): Promise<Response> {
+export async function fetchWithProgress(ctx: GameContext, url: string, options?: RequestInit): Promise<Response> {
   const status = { loaded: 0, total: 0 };
 
-  const response = await fetch(url);
+  const response = await fetch(url, options);
   const contentLength = response.headers.get("content-length");
   const total = parseInt(contentLength || "0", 10);
 

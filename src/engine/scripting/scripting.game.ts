@@ -2,7 +2,7 @@ import { addComponent, defineQuery, exitQuery } from "bitecs";
 
 import scriptingRuntimeWASMUrl from "./emscripten/build/scripting-runtime.wasm?url";
 import { createCursorView } from "../allocator/CursorView";
-import { GameState, RemoteResourceManager } from "../GameTypes";
+import { GameContext, RemoteResourceManager } from "../GameTypes";
 import { createMatrixWASMModule } from "../matrix/matrix.game";
 import { createWebSGNetworkModule } from "../network/scripting.game";
 import { RemoteScene } from "../resource/RemoteResources";
@@ -25,7 +25,10 @@ export interface Script {
   initialize: () => void;
   loaded: () => void;
   entered: () => void;
-  update: (dt: number) => void;
+  update: (dt: number, time: number) => void;
+  dispose: () => void;
+  peerEntered: (peerIndex: number) => void;
+  peerExited: (peerIndex: number) => void;
 }
 
 export const ScriptComponent = new Map<number, Script>();
@@ -33,34 +36,41 @@ export const ScriptComponent = new Map<number, Script>();
 export const scriptQuery = defineQuery([ScriptComponent]);
 const scriptExitQuery = exitQuery(scriptQuery);
 
-export function addScriptComponent(ctx: GameState, scene: RemoteScene, script: Script) {
+export function addScriptComponent(ctx: GameContext, scene: RemoteScene, script: Script) {
   const eid = scene.eid;
   script.loaded();
   addComponent(ctx.world, ScriptComponent, eid);
   ScriptComponent.set(eid, script);
 }
 
-export function ScriptingSystem(ctx: GameState) {
+export function ScriptingSystem(ctx: GameContext) {
   const entities = scriptQuery(ctx.world);
 
   for (let i = 0; i < entities.length; i++) {
     const eid = entities[i];
     const script = ScriptComponent.get(eid)!;
-    script.update(ctx.dt);
+    // TODO: Use a networked global time variable instead of elapsed
+
+    if (script.state === ScriptState.Entered) {
+      script.update(ctx.dt, ctx.elapsed / 1000);
+    }
   }
 
   const removedEntities = scriptExitQuery(ctx.world);
 
   for (let i = 0; i < removedEntities.length; i++) {
     const eid = removedEntities[i];
+    const script = ScriptComponent.get(eid)!;
+    script.dispose();
     ScriptComponent.delete(eid);
   }
 }
 
 export async function loadScript(
-  ctx: GameState,
+  ctx: GameContext,
   resourceManager: RemoteResourceManager,
-  scriptUrl: string
+  scriptUrl: string,
+  signal?: AbortSignal
 ): Promise<Script> {
   const memory = new WebAssembly.Memory({ initial: 1024, maximum: 1024 });
 
@@ -68,6 +78,7 @@ export async function loadScript(
     resourceManager,
     memory,
     U8Heap: new Uint8Array(memory.buffer),
+    I32Heap: new Int32Array(memory.buffer),
     U32Heap: new Uint32Array(memory.buffer),
     F32Heap: new Float32Array(memory.buffer),
     cursorView: createCursorView(memory.buffer, true),
@@ -77,7 +88,7 @@ export async function loadScript(
 
   let wasmBuffer: ArrayBuffer | undefined;
 
-  const response = await fetch(scriptUrl);
+  const response = await fetch(scriptUrl, { signal });
 
   const contentType = response.headers.get("content-type");
 
@@ -88,7 +99,7 @@ export async function loadScript(
       contentType.startsWith("text/javascript")
     ) {
       const scriptSource = await response.text();
-      const jsWASMResponse = await fetch(scriptingRuntimeWASMUrl);
+      const jsWASMResponse = await fetch(scriptingRuntimeWASMUrl, { signal });
       wasmBuffer = await jsWASMResponse.arrayBuffer();
       wasmCtx.encodedJSSource = wasmCtx.textEncoder.encode(scriptSource);
     } else if (contentType === "application/wasm") {
@@ -100,15 +111,20 @@ export async function loadScript(
     throw new Error(`Content type header not set for script "${scriptUrl}"`);
   }
 
+  const [thirdroomModule, disposeThirdroomModule] = createThirdroomModule(ctx, wasmCtx);
+  const [websgModule, disposeWebSGModule] = createWebSGModule(ctx, wasmCtx);
+  const [matrixModule, disposeMatrixModule] = createMatrixWASMModule(ctx, wasmCtx);
+  const [networkModule, disposeNetworkModule] = createWebSGNetworkModule(ctx, wasmCtx);
+
   const imports: WebAssembly.Imports = {
     env: {
       memory,
     },
     wasi_snapshot_preview1: createWASIModule(wasmCtx),
-    matrix: createMatrixWASMModule(ctx, wasmCtx),
-    websg: createWebSGModule(ctx, wasmCtx),
-    websg_network: createWebSGNetworkModule(ctx, wasmCtx),
-    thirdroom: createThirdroomModule(ctx, wasmCtx),
+    matrix: matrixModule,
+    websg: websgModule,
+    websg_networking: networkModule,
+    thirdroom: thirdroomModule,
   };
 
   const { instance } = await WebAssembly.instantiate(wasmBuffer, imports);
@@ -127,6 +143,16 @@ export async function loadScript(
 
   const websgUpdate =
     exports.websg_update && typeof exports.websg_update === "function" ? exports.websg_update : undefined;
+
+  const websgPeerEntered =
+    exports.websg_peer_entered && typeof exports.websg_peer_entered === "function"
+      ? exports.websg_peer_entered
+      : undefined;
+
+  const websgPeerExited =
+    exports.websg_peer_exited && typeof exports.websg_peer_exited === "function"
+      ? exports.websg_peer_exited
+      : undefined;
 
   const script: Script = {
     state: ScriptState.Uninitialized,
@@ -161,7 +187,7 @@ export async function loadScript(
       }
 
       if (this.state !== ScriptState.Initialized) {
-        throw new Error("initialize() can only be called from the Initialized state");
+        throw new Error("loaded() can only be called from the Initialized state");
       }
 
       if (websgLoad) {
@@ -182,7 +208,7 @@ export async function loadScript(
       }
 
       if (this.state !== ScriptState.Loaded) {
-        throw new Error("initialize() can only be called from the Loaded state");
+        throw new Error("entered() can only be called from the Loaded state");
       }
 
       if (websgEnter) {
@@ -197,14 +223,14 @@ export async function loadScript(
 
       this.state = ScriptState.Entered;
     },
-    update(dt: number) {
+    update(dt: number, time: number) {
       if (this.state === ScriptState.Error) {
         return;
       }
 
-      if (this.state === ScriptState.Loaded || this.state === ScriptState.Entered) {
+      if (this.state === ScriptState.Entered) {
         if (websgUpdate) {
-          const result = websgUpdate(dt);
+          const result = websgUpdate(dt, time);
 
           if (result < 0) {
             console.error(`Script update callback failed with code: ${result}`);
@@ -213,12 +239,55 @@ export async function loadScript(
           }
         }
       } else {
-        throw new Error("update() can only be called from the Loaded or Entered state");
+        throw new Error("update() can only be called from the Entered state");
       }
     },
-  };
+    peerEntered(peerId: number) {
+      if (this.state === ScriptState.Error) {
+        return;
+      }
 
-  script.initialize();
+      if (this.state === ScriptState.Loaded || this.state === ScriptState.Entered) {
+        if (websgPeerEntered) {
+          const result = websgPeerEntered(peerId);
+
+          if (result < 0) {
+            console.error(`Script peerEntered callback failed with code: ${result}`);
+            this.state = ScriptState.Error;
+            return;
+          }
+        }
+      } else {
+        throw new Error("peerEntered() can only be called from the Loaded or Entered state");
+      }
+    },
+    peerExited(peerId: number) {
+      if (this.state === ScriptState.Error) {
+        return;
+      }
+
+      if (this.state === ScriptState.Loaded || this.state === ScriptState.Entered) {
+        if (websgPeerExited) {
+          const result = websgPeerExited(peerId);
+
+          if (result < 0) {
+            console.error(`Script peerExited callback failed with code: ${result}`);
+            this.state = ScriptState.Error;
+            return;
+          }
+        }
+      } else {
+        throw new Error("peerExited() can only be called from Loaded or Entered state");
+      }
+    },
+    dispose() {
+      console.trace("script disposed");
+      disposeThirdroomModule();
+      disposeWebSGModule();
+      disposeMatrixModule();
+      disposeNetworkModule();
+    },
+  };
 
   return script;
 }

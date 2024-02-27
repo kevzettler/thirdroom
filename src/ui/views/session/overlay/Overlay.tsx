@@ -1,5 +1,6 @@
 import classNames from "classnames";
 import { GroupCall } from "@thirdroom/hydrogen-view-sdk";
+import { useAtom, useAtomValue } from "jotai";
 
 import "./Overlay.css";
 import { getAvatarHttpUrl, getIdentifierColorNumber } from "../../../utils/avatar";
@@ -20,7 +21,6 @@ import { WorldPreview } from "./WorldPreview";
 import { CreateWorld } from "../create-world/CreateWorld";
 import { UserProfile } from "../user-profile/UserProfile";
 import { useRoom } from "../../../hooks/useRoom";
-import { useStore, SidebarTabs, OverlayWindow } from "../../../hooks/useStore";
 import { RoomListHome } from "../sidebar/RoomListHome";
 import { RoomListFriends } from "../sidebar/RoomListFriends";
 import { useInvite } from "../../../hooks/useInvite";
@@ -28,69 +28,71 @@ import { WorldSettings } from "../world-settings/WorldSettings";
 import { RoomListNotifications } from "../sidebar/RoomListNotifications";
 import { NowPlayingWorld } from "./NowPlayingWorld";
 import { NowPlayingControls } from "./NowPlayingControls";
-import { useWorldAction } from "../../../hooks/useWorldAction";
 import { useCalls } from "../../../hooks/useCalls";
 import { useRoomCall } from "../../../hooks/useRoomCall";
 import { DiscoverView } from "../discover/DiscoverView";
 import config from "../../../../../config.json";
+import { activeChatsAtom, openedChatAtom } from "../../../state/overlayChat";
+import { overlayWorldAtom } from "../../../state/overlayWorld";
+import { SidebarTab, sidebarTabAtom } from "../../../state/sidebarTab";
+import { OverlayWindow, overlayWindowAtom } from "../../../state/overlayWindow";
+import { worldAtom } from "../../../state/world";
+import { useDisableInput } from "../../../hooks/useDisableInput";
+import { useWorldNavigator } from "../../../hooks/useWorldNavigator";
 
 export function Overlay() {
   const { session, platform } = useHydrogen(true);
   const calls = useCalls(session);
 
-  const {
-    selectedSidebarTab,
-    selectedChatId,
-    activeChats,
-    selectChat,
-    minimizeChat,
-    closeChat,
-    worldId,
-    isEnteredWorld,
-    selectedWorldId,
-  } = useStore((state) => ({
-    selectedSidebarTab: state.overlaySidebar.selectedSidebarTab,
-    selectSidebarTab: state.overlaySidebar.selectSidebarTab,
-    selectedChatId: state.overlayChat.selectedChatId,
-    activeChats: state.overlayChat.activeChats,
-    selectChat: state.overlayChat.selectChat,
-    minimizeChat: state.overlayChat.minimizeChat,
-    closeChat: state.overlayChat.closeChat,
-    worldId: state.world.worldId,
-    isEnteredWorld: state.world.entered,
-    selectedWorldId: state.overlayWorld.selectedWorldId,
-  }));
+  const openedChatId = useAtomValue(openedChatAtom);
+  const [activeChats, setActiveChat] = useAtom(activeChatsAtom);
+  const selectedWorldId = useAtomValue(overlayWorldAtom);
+  const sidebarTab = useAtomValue(sidebarTabAtom);
+
+  const { worldId, entered: isWorldEntered } = useAtomValue(worldAtom);
 
   const repositoryRoom = useRoom(session, config.repositoryRoomIdOrAlias);
 
   const activeCall = useRoomCall(calls, worldId);
-  const { exitWorld } = useWorldAction(session);
-  const world = useRoom(session, isEnteredWorld ? worldId : undefined);
-  const selectedChat = useRoom(session, selectedChatId);
-  const selectedChatInvite = useInvite(session, selectedChatId);
-  const { selectedWindow, worldSettingsId } = useStore((state) => state.overlayWindow);
+  const { navigateExitWorld } = useWorldNavigator(session);
+  const world = useRoom(session, isWorldEntered ? worldId : undefined);
+  const selectedChat = useRoom(session, openedChatId);
+  const selectedChatInvite = useInvite(session, openedChatId);
+  const overlayWindow = useAtomValue(overlayWindowAtom);
   const groupCalls = new Map<string, GroupCall>();
   Array.from(calls).flatMap(([, groupCall]) => groupCalls.set(groupCall.roomId, groupCall));
 
+  const worldSettingRoom = useRoom(
+    session,
+    overlayWindow.type === OverlayWindow.WorldSettings ? overlayWindow.roomId : undefined
+  );
+
+  useDisableInput();
+
   const isChatOpen = selectedChat || selectedChatInvite;
   return (
-    <div className={classNames("Overlay", { "Overlay--no-bg": !isEnteredWorld }, "flex items-end")}>
+    <div className={classNames("Overlay", { "Overlay--no-bg": !isWorldEntered }, "flex items-end")}>
       <SidebarView
         spaces={<SpacesView />}
         roomList={
-          selectedWindow === undefined && (
+          overlayWindow.type === OverlayWindow.None && (
             <RoomListView
               header={<RoomListHeader />}
               content={
                 <RoomListContent>
-                  {selectedSidebarTab === SidebarTabs.Home && <RoomListHome groupCalls={groupCalls} />}
-                  {selectedSidebarTab === SidebarTabs.Friends && <RoomListFriends />}
-                  {selectedSidebarTab === SidebarTabs.Notifications && <RoomListNotifications />}
+                  {sidebarTab === SidebarTab.Home && <RoomListHome groupCalls={groupCalls} />}
+                  {sidebarTab === SidebarTab.Friends && <RoomListFriends />}
+                  {sidebarTab === SidebarTab.Notifications && <RoomListNotifications />}
                 </RoomListContent>
               }
               footer={
                 world && activeCall ? (
-                  <NowPlayingWorld world={world} activeCall={activeCall} onExitWorld={exitWorld} platform={platform} />
+                  <NowPlayingWorld
+                    world={world}
+                    activeCall={activeCall}
+                    onExitWorld={navigateExitWorld}
+                    platform={platform}
+                  />
                 ) : (
                   <NowPlayingControls />
                 )
@@ -99,14 +101,14 @@ export function Overlay() {
           )
         }
       />
-      {selectedWindow ? (
+      {overlayWindow.type !== OverlayWindow.None ? (
         <div className="Overlay__window grow flex">
-          {selectedWindow === OverlayWindow.CreateWorld && <CreateWorld />}
-          {selectedWindow === OverlayWindow.UserProfile && <UserProfile />}
-          {selectedWindow === OverlayWindow.WorldSettings && worldSettingsId && (
-            <WorldSettings roomId={worldSettingsId} />
+          {overlayWindow.type === OverlayWindow.CreateWorld && <CreateWorld />}
+          {overlayWindow.type === OverlayWindow.UserProfile && <UserProfile />}
+          {overlayWindow.type === OverlayWindow.WorldSettings && worldSettingRoom && (
+            <WorldSettings room={worldSettingRoom} />
           )}
-          {selectedWindow === OverlayWindow.Discover && repositoryRoom && <DiscoverView room={repositoryRoom} />}
+          {overlayWindow.type === OverlayWindow.Discover && repositoryRoom && <DiscoverView room={repositoryRoom} />}
         </div>
       ) : (
         <div className="Overlay__content grow">
@@ -120,8 +122,8 @@ export function Overlay() {
                       platform={platform}
                       session={session}
                       room={selectedChat || selectedChatInvite!}
-                      onMinimize={minimizeChat}
-                      onClose={closeChat}
+                      onMinimize={(roomId) => setActiveChat({ type: "MINIMIZE", roomId })}
+                      onClose={(roomId) => setActiveChat({ type: "CLOSE", roomId })}
                     />
                     {selectedChat && <ChatViewContent room={selectedChat} />}
                     {selectedChatInvite && <ChatViewInvite session={session} roomId={selectedChatInvite.id} />}
@@ -131,12 +133,13 @@ export function Overlay() {
               tiles={[...activeChats].map((rId) => {
                 const room = session.rooms.get(rId) ?? session.invites.get(rId);
                 if (!room) return null;
+                const isActive = rId === openedChatId;
 
                 const roomName = room.name || "Empty room";
                 return (
                   <ActiveChatTile
                     key={rId}
-                    isActive={rId === selectedChatId}
+                    isActive={isActive}
                     roomId={rId}
                     avatar={
                       <Avatar
@@ -151,8 +154,8 @@ export function Overlay() {
                       />
                     }
                     title={roomName}
-                    onClick={selectChat}
-                    onClose={closeChat}
+                    onClick={(roomId) => setActiveChat({ type: isActive ? "MINIMIZE" : "OPEN", roomId })}
+                    onClose={(roomId) => setActiveChat({ type: "CLOSE", roomId })}
                   />
                 );
               })}

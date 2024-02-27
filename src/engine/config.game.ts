@@ -1,30 +1,23 @@
 import { defineConfig } from "./module/module.common";
 import { AudioModule } from "./audio/audio.game";
-import { InputModule, ResetInputSystem } from "./input/input.game";
-import { ApplyInputSystem } from "./input/ApplyInputSystem";
+import { InputModule } from "./input/input.game";
+import { UpdateRawInputSystem, ResetRawInputSystem } from "./input/RawInputSystems";
 import { PhysicsModule, PhysicsSystem } from "./physics/physics.game";
 import { NetworkExitWorldQueueSystem, NetworkModule } from "./network/network.game";
-import { ActionMapHistorianSystem, ActionMappingSystem } from "./input/ActionMappingSystem";
-import {
-  FirstPersonCameraModule,
-  FirstPersonCameraSystem,
-  NetworkedFirstPersonCameraSystem,
-} from "../plugins/FirstPersonCamera";
+import { ActionMappingSystem } from "./input/ActionMappingSystem";
 import {
   KinematicCharacterControllerModule,
   KinematicCharacterControllerSystem,
-  SendClientPosition,
-  UpdateClientPosition,
-} from "../plugins/KinematicCharacterController";
+} from "./player/KinematicCharacterController";
 import { GameWorkerStatsSystem, StatsModule } from "./stats/stats.game";
 import {
   EditorModule,
   //EditorSelectionSystem,
   EditorStateSystem,
 } from "./editor/editor.game";
-import { GameState } from "./GameTypes";
+import { GameContext } from "./GameTypes";
 import { RendererModule } from "./renderer/renderer.game";
-import { SpawnablesModule, SpawnableSystem } from "../plugins/spawnables/spawnables.game";
+import { SpawnablesModule } from "../plugins/spawnables/spawnables.game";
 import {
   RecycleResourcesSystem,
   ResourceDisposalSystem,
@@ -32,14 +25,17 @@ import {
   ResourceModule,
   ResourceTickSystem,
 } from "./resource/resource.game";
-import { ThirdRoomModule, ThirdroomSystem } from "../plugins/thirdroom/thirdroom.game";
 import { UpdateMatrixWorldSystem } from "./component/transform";
-import { FlyCharacterControllerModule, FlyControllerSystem } from "../plugins/FlyCharacterController";
+import { FlyCharacterControllerModule, FlyControllerSystem } from "./player/FlyCharacterController";
 import { NetworkInterpolationSystem } from "./network/NetworkInterpolationSystem";
 import { PrefabDisposalSystem, PrefabModule } from "./prefab/prefab.game";
 import { AnimationSystem } from "./animation/animation.game";
-import { InteractionModule, InteractionSystem } from "../plugins/interaction/interaction.game";
-import { NametagModule, NametagSystem } from "../plugins/nametags/nametags.game";
+import {
+  InteractionModule,
+  InteractionSystem,
+  ResetInteractablesSystem,
+} from "../plugins/interaction/interaction.game";
+import { NametagModule, NametagSystem } from "./player/nametags.game";
 import { ScriptingSystem } from "./scripting/scripting.game";
 import { GameResourceSystem } from "./resource/GameResourceSystem";
 import { RemoteCameraSystem } from "./camera/camera.game";
@@ -50,11 +46,16 @@ import { IncomingTripleBufferSystem } from "./resource/IncomingTripleBufferSyste
 import { OutgoingTripleBufferSystem } from "./resource/OutgoingTripleBufferSystem";
 import { SkipRenderLerpSystem } from "./component/SkipRenderLerpSystem";
 import { SetWebXRReferenceSpaceSystem, WebXRAvatarRigSystem } from "./input/WebXRAvatarRigSystem";
-import { XRInteractionSystem } from "../plugins/interaction/XRInteractionSystem";
+// import { XRInteractionSystem } from "../plugins/interaction/XRInteractionSystem";
 import { MatrixModule } from "./matrix/matrix.game";
 import { WebSGNetworkModule } from "./network/scripting.game";
+import { WebSGUIModule } from "./ui/ui.game";
+import { PlayerModule } from "./player/Player.game";
+import { EnableCharacterControllerSystem } from "./player/CharacterController";
+import { CameraRigSystem } from "./player/CameraRig";
+import { WingRivalsModule } from "../plugins/wingrivals/wingrivals.game";
 
-export default defineConfig<GameState>({
+export default defineConfig<GameContext>({
   modules: [
     PrefabModule,
     ResourceModule,
@@ -65,43 +66,39 @@ export default defineConfig<GameState>({
     StatsModule,
     EditorModule,
     RendererModule,
-    ThirdRoomModule,
     MatrixModule,
-    FirstPersonCameraModule,
+    PlayerModule,
     KinematicCharacterControllerModule,
     FlyCharacterControllerModule,
     InteractionModule,
     SpawnablesModule,
     NametagModule,
     WebSGNetworkModule,
+    WebSGUIModule,
+    WingRivalsModule
   ],
   systems: [
     IncomingTripleBufferSystem,
 
-    ApplyInputSystem,
+    UpdateRawInputSystem,
+
     WebXRAvatarRigSystem,
     ActionMappingSystem,
 
     InboundNetworkSystem,
 
-    FirstPersonCameraSystem,
+    CameraRigSystem,
+
     KinematicCharacterControllerSystem,
-    // ClientSidePredictionSystem,
     FlyControllerSystem,
     SetWebXRReferenceSpaceSystem,
     InteractionSystem,
-    XRInteractionSystem,
-    SpawnableSystem,
-    ThirdroomSystem,
 
-    // update client position
-    UpdateClientPosition,
+    //    XRInteractionSystem,
+    EnableCharacterControllerSystem,
 
     // step physics forward and copy rigidbody data to transform component
     PhysicsSystem,
-
-    // send client position to host
-    SendClientPosition,
 
     // interpolate towards authoritative state
     NetworkInterpolationSystem,
@@ -116,7 +113,6 @@ export default defineConfig<GameState>({
     EditorStateSystem,
     //EditorSelectionSystem,
 
-    NetworkedFirstPersonCameraSystem,
     OutboundNetworkSystem,
     NetworkExitWorldQueueSystem,
 
@@ -124,8 +120,8 @@ export default defineConfig<GameState>({
     PrefabDisposalSystem,
     GLTFResourceDisposalSystem,
 
-    ActionMapHistorianSystem, // Store this frame's player input and the state it resulted in
-    ResetInputSystem,
+    ResetInteractablesSystem,
+    ResetRawInputSystem,
     GameWorkerStatsSystem,
 
     GameResourceSystem, // Commit Resources to TripleBuffer

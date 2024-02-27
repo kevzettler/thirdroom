@@ -530,11 +530,23 @@ export interface GLTFNode extends GLTFChildOfRootProperty {
     MOZ_hubs_components?: GLTFHubsComponents;
     MX_tiles_renderer?: GLTFTilesRenderer;
     OMI_collider?: GLTFColliderRef;
+    OMI_physics_body?: GLTFPhysicsBody;
     MX_portal?: GLTFPortal;
     OMI_link?: GLTFLink;
     MX_spawn_point?: {};
+    MX_static?: {};
+    MX_lights_shadows?: GLTFLightsShadows;
+    MX_components?: GLTFNodeComponents;
   };
 }
+
+export interface GLTFComponentProps {
+  [propName: string]: GLTFComponentPropertyValue;
+}
+
+export type GLTFNodeComponents = {
+  [componentName: string]: GLTFComponentProps;
+} & GLTFProperty;
 
 interface GLTFLightRef extends GLTFProperty {
   light: GLTFId;
@@ -578,6 +590,11 @@ export interface GLTFPortal extends GLTFProperty {
   uri: string;
 }
 
+export interface GLTFLightsShadows extends GLTFProperty {
+  castShadow: boolean;
+  receiveShadow: boolean;
+}
+
 export interface GLTFInstancedMeshExtension extends GLTFProperty {
   /**
    * A plain JSON object, where each key corresponds to a mesh attribute semantic and each value is the index of the accessor containing attribute's data.
@@ -600,6 +617,14 @@ export interface GLTFReflectionProbeRef extends GLTFProperty {
 
 export interface GLTFColliderRef extends GLTFProperty {
   collider: GLTFId;
+}
+
+export interface GLTFPhysicsBody extends GLTFProperty {
+  type: "static" | "kinematic" | "character" | "rigid" | "vehicle" | "trigger";
+  mass?: number;
+  linearVelocity?: number[];
+  angularVelocity?: number[];
+  inertiaTensor?: number[];
 }
 
 /**
@@ -775,7 +800,32 @@ export interface GLTFRoot extends GLTFProperty {
     KHR_lights_punctual?: GLTFKHRLightsExtension;
     MX_reflection_probes?: GLTFRootReflectionProbesExtension;
     OMI_collider?: GLTFColliders;
+    MX_components?: GLTFComponentDefinitions;
   };
+}
+
+export type GLTFComponentPropertyType = "bool" | "i32" | "f32" | "vec2" | "vec3" | "vec4" | "ref" | string;
+
+export type GLTFComponentPropertyStorageType = "i32" | "u32" | "f32";
+
+export type GLTFComponentPropertyValue = number | number[];
+
+export interface GLTFComponentPropertyDefinition {
+  name: string;
+  type: GLTFComponentPropertyType;
+  refType?: string;
+  storageType: GLTFComponentPropertyStorageType;
+  size: number;
+  defaultValue?: GLTFComponentPropertyValue;
+}
+
+export interface GLTFComponentDefinition extends GLTFProperty {
+  name: string;
+  props?: GLTFComponentPropertyDefinition[];
+}
+
+export interface GLTFComponentDefinitions extends GLTFProperty {
+  definitions: GLTFComponentDefinition[];
 }
 
 interface GLTFKHRAudioExtension extends GLTFProperty {
@@ -863,8 +913,10 @@ export interface GLTFColliders extends GLTFProperty {
 
 export interface GLTFCollider extends GLTFChildOfRootProperty {
   type: "box" | "mesh" | "sphere" | "capsule" | "hull";
-  extents?: number[];
+  extents?: number[]; // DEPRECATED use size instead
+  size?: number[];
   radius?: number;
   height?: number;
   mesh?: number;
+  isTrigger?: boolean;
 }

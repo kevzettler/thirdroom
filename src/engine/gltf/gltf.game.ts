@@ -1,12 +1,11 @@
 import { addComponent, defineQuery, exitQuery } from "bitecs";
-import { glMatrix, mat4, quat, vec3 } from "gl-matrix";
-import RAPIER, { ColliderDesc } from "@dimforge/rapier3d-compat";
+import { glMatrix, mat4, quat } from "gl-matrix";
+import RAPIER from "@dimforge/rapier3d-compat";
 import { AnimationAction, AnimationClip, AnimationMixer, Bone, Group, Object3D, SkinnedMesh } from "three";
 
 import { SpawnPoint } from "../component/SpawnPoint";
 import { addChild, traverse, updateMatrix, updateMatrixWorld } from "../component/transform";
-import { GameState, RemoteResourceManager, World } from "../GameTypes";
-import { promiseObject } from "../utils/promiseObject";
+import { GameContext, RemoteResourceManager, World } from "../GameTypes";
 import resolveURL from "../utils/resolveURL";
 import {
   GLTFRoot,
@@ -18,11 +17,13 @@ import {
   GLTFHubsComponents,
   GLTFLink,
   GLTFPortal,
-  GLTFColliderRef,
   GLTFTilesRenderer,
   GLTFCharacterController,
   GLTFAnimationChannel,
   GLTFAnimationSampler,
+  GLTFComponentDefinitions,
+  GLTFNodeComponents,
+  GLTFPhysicsBody,
 } from "./GLTF";
 import { fetchWithProgress } from "../utils/fetchWithProgress.game";
 import {
@@ -42,6 +43,8 @@ import {
   AnimationChannelTargetPath,
   AnimationSamplerInterpolation,
   TextureFormat,
+  ColliderType,
+  PhysicsBodyType,
 } from "../resource/schema";
 import { toSharedArrayBuffer } from "../utils/arraybuffer";
 import {
@@ -55,6 +58,7 @@ import {
   RemoteBuffer,
   RemoteBufferView,
   RemoteCamera,
+  RemoteCollider,
   RemoteImage,
   RemoteInstancedMesh,
   RemoteLight,
@@ -63,6 +67,7 @@ import {
   RemoteMesh,
   RemoteMeshPrimitive,
   RemoteNode,
+  RemotePhysicsBody,
   RemoteReflectionProbe,
   RemoteSampler,
   RemoteScene,
@@ -73,13 +78,16 @@ import {
 } from "../resource/RemoteResources";
 import { addPortalComponent } from "../../plugins/portals/portals.game";
 import { getModule } from "../module/module.common";
-import { addRigidBody, PhysicsModule } from "../physics/physics.game";
-import { getAccessorArrayView, vec3ArrayTransformMat4 } from "../accessor/accessor.common";
+import { addPhysicsBody, PhysicsModule } from "../physics/physics.game";
+import { getAccessorArrayView, vec3ArrayTransformMat4 } from "../common/accessor";
 import { staticRigidBodyCollisionGroups } from "../physics/CollisionGroups";
-import { CharacterControllerType, SceneCharacterControllerComponent } from "../../plugins/CharacterController";
+import { CharacterControllerType, SceneCharacterControllerComponent } from "../player/CharacterController";
 import { loadGLTFAnimationClip } from "./animation.three";
 import { AnimationComponent, BoneComponent } from "../animation/animation.game";
 import { RemoteResource } from "../resource/RemoteResourceClass";
+import { getRotationNoAlloc } from "../utils/getRotationNoAlloc";
+import { TypedArray32 } from "../utils/typedarray";
+import { addResourceRef } from "../resource/resource.game";
 
 /**
  * GLTFResource stores references to all of the resources loaded from a glTF file.
@@ -104,9 +112,9 @@ export interface GLTFResource {
    **/
   root: GLTFRoot;
   /**
-   * Binary chunk of the glTF resource (only in .glb)
+   * Buffer data keyed by buffer index
    **/
-  binaryChunk?: SharedArrayBuffer;
+  buffers: Map<number, SharedArrayBuffer>;
   /**
    * Map of resource name to GLTFSubResourceCache.
    * Used as a dependency graph and for creating multiple instances of a GLTFResource
@@ -128,12 +136,16 @@ export interface LoadGLTFOptions {
    * Map from blob to uris used in glTF
    **/
   fileMap?: Map<string, string>;
+  /**
+   * AbortSignal to use to cancel loading glTF resource
+   */
+  signal?: AbortSignal;
 }
 
 /**
  * Load a GLTFResource from a .gltf or .glb uri
  */
-export async function loadGLTF(ctx: GameState, uri: string, options?: LoadGLTFOptions): Promise<GLTFResource> {
+export async function loadGLTF(ctx: GameContext, uri: string, options?: LoadGLTFOptions): Promise<GLTFResource> {
   const url = new URL(uri, self.location.href);
 
   const resourceManager = options?.resourceManager || ctx.resourceManager;
@@ -145,7 +157,7 @@ export async function loadGLTF(ctx: GameState, uri: string, options?: LoadGLTFOp
     return entry.promise;
   }
 
-  const promise = loadGLTFResource(ctx, resourceManager, url.href, options?.fileMap);
+  const promise = loadGLTFResource(ctx, resourceManager, url.href, options);
 
   resourceManager.gltfCache.set(url.href, {
     promise,
@@ -171,7 +183,7 @@ function removeGLTFResourceRef(resource: GLTFResource): boolean {
 
     for (const cache of resource.caches.values()) {
       for (const entry of cache.values()) {
-        entry.value?.removeRef();
+        entry.removeRef();
       }
     }
 
@@ -197,7 +209,7 @@ function addGLTFResourceComponent(world: World, eid: number, resource: GLTFResou
 const gltfResourceQuery = defineQuery([GLTFResourceComponent]);
 const gltfResourceExitQuery = exitQuery(gltfResourceQuery);
 
-export function GLTFResourceDisposalSystem(ctx: GameState) {
+export function GLTFResourceDisposalSystem(ctx: GameContext) {
   const entities = gltfResourceExitQuery(ctx.world);
 
   for (let i = 0; i < entities.length; i++) {
@@ -211,14 +223,14 @@ export function GLTFResourceDisposalSystem(ctx: GameState) {
   }
 }
 
-export function createNodeFromGLTFURI(ctx: GameState, uri: string): RemoteNode {
+export function createNodeFromGLTFURI(ctx: GameContext, uri: string): RemoteNode {
   const node = new RemoteNode(ctx.resourceManager);
   loadGLTF(ctx, uri).then((resource) => loadDefaultGLTFScene(ctx, resource, { existingNode: node }));
   return node;
 }
 
-export async function loadDefaultGLTFScene(
-  ctx: GameState,
+export function loadDefaultGLTFScene(
+  ctx: GameContext,
   resource: GLTFResource,
   options?: GLTFSceneOptions & GLTFLoaderOptions
 ) {
@@ -229,8 +241,8 @@ export async function loadDefaultGLTFScene(
   }
 
   const loaderCtx = createGLTFLoaderContext(ctx, resource, options);
-  const scene = await loadGLTFScene(loaderCtx, defaultSceneIndex, options);
-  await postLoad(loaderCtx, scene);
+  const scene = loadGLTFScene(loaderCtx, defaultSceneIndex, options);
+  postLoad(loaderCtx, scene);
   addGLTFResourceComponent(ctx.world, scene.eid, resource);
   return scene;
 }
@@ -239,12 +251,12 @@ const GLB_HEADER_BYTE_LENGTH = 12;
 const GLB_MAGIC = 0x46546c67; // "glTF" in ASCII
 
 async function loadGLTFResource(
-  ctx: GameState,
+  ctx: GameContext,
   resourceManager: RemoteResourceManager,
   url: string,
-  fileMap?: Map<string, string>
+  options?: LoadGLTFOptions
 ) {
-  const res = await fetchWithProgress(ctx, url);
+  const res = await fetchWithProgress(ctx, url, { signal: options?.signal });
 
   const buffer = await res.arrayBuffer();
 
@@ -257,13 +269,19 @@ async function loadGLTFResource(
     throw new Error(`Unsupported glb version: ${version}`);
   }
 
+  let resource: GLTFResource;
+
   if (isGLB) {
-    return loadGLTFBinary(ctx, resourceManager, buffer, url, fileMap);
+    resource = await loadGLTFBinary(ctx, resourceManager, buffer, url, options);
   } else {
     const jsonStr = new TextDecoder().decode(buffer);
     const json = JSON.parse(jsonStr);
-    return loadGLTFJSON(ctx, resourceManager, json, url, undefined, fileMap);
+    resource = await loadGLTFJSON(ctx, resourceManager, json, url, undefined, options);
   }
+
+  loadGLTFResourceExtensions(resource);
+
+  return resource;
 }
 
 const ChunkType = {
@@ -274,11 +292,11 @@ const ChunkType = {
 const CHUNK_HEADER_BYTE_LENGTH = 8;
 
 async function loadGLTFBinary(
-  ctx: GameState,
+  ctx: GameContext,
   resourceManager: RemoteResourceManager,
   buffer: ArrayBuffer,
   url: string,
-  fileMap?: Map<string, string>
+  options?: LoadGLTFOptions
 ): Promise<GLTFResource> {
   let jsonChunkData: string | undefined;
   let binChunkData: SharedArrayBuffer | undefined;
@@ -312,16 +330,16 @@ async function loadGLTFBinary(
     throw new Error("Invalid glb. Glb has no JSON chunk.");
   }
 
-  return loadGLTFJSON(ctx, resourceManager, jsonChunkData, url, binChunkData, fileMap);
+  return loadGLTFJSON(ctx, resourceManager, jsonChunkData, url, binChunkData, options);
 }
 
 async function loadGLTFJSON(
-  ctx: GameState,
+  ctx: GameContext,
   resourceManager: RemoteResourceManager,
   json: unknown,
   url: string,
   binaryChunk?: SharedArrayBuffer,
-  fileMap?: Map<string, string>
+  options?: LoadGLTFOptions
 ): Promise<GLTFResource> {
   const root = json as GLTFRoot;
 
@@ -348,13 +366,35 @@ async function loadGLTFJSON(
 
   const resource: GLTFResource = {
     url,
-    fileMap: fileMap || new Map(),
+    fileMap: options?.fileMap || new Map(),
     baseUrl,
     root,
-    binaryChunk,
+    buffers: new Map(),
     caches: new Map(),
     manager: resourceManager,
   };
+
+  if (resource.root.buffers) {
+    await Promise.all(
+      resource.root.buffers.map(async ({ uri }, index) => {
+        let data: SharedArrayBuffer;
+
+        if (uri) {
+          const filePath = resource.fileMap.get(uri) || uri;
+          const url = resolveURL(filePath, resource.baseUrl);
+          const response = await fetch(url, { signal: options?.signal });
+          const bufferData = await response.arrayBuffer();
+          data = toSharedArrayBuffer(bufferData);
+        } else if (index === 0 && binaryChunk) {
+          data = binaryChunk;
+        } else {
+          throw new Error(`Invalid buffer at index ${index}`);
+        }
+
+        resource.buffers.set(index, data);
+      })
+    );
+  }
 
   return resource;
 }
@@ -362,6 +402,7 @@ async function loadGLTFJSON(
 export interface GLTFLoaderOptions {
   audioOutput?: AudioEmitterOutput;
   createDefaultMeshColliders?: boolean;
+  rootIsStatic?: boolean;
 }
 
 /**
@@ -369,17 +410,18 @@ export interface GLTFLoaderOptions {
  * tempCache is only used for resources that are referenced when building this hierarchy
  */
 export type GLTFLoaderContext = {
-  ctx: GameState;
+  ctx: GameContext;
   resource: GLTFResource;
   nodeIndexMap: Map<RemoteNode, number>;
   nodeMap: Map<number, RemoteNode>;
   nodeToObject3D: Map<RemoteNode, Object3D>;
   tempCache: Map<string, GLTFSubresourceCache>;
   postLoadCallbacks: GLTFPostLoadCallback[];
+  useMXStatic: boolean;
 } & GLTFLoaderOptions;
 
 const createGLTFLoaderContext = (
-  ctx: GameState,
+  ctx: GameContext,
   resource: GLTFResource,
   options?: GLTFLoaderOptions
 ): GLTFLoaderContext => ({
@@ -390,28 +432,21 @@ const createGLTFLoaderContext = (
   nodeToObject3D: new Map(),
   tempCache: new Map(),
   postLoadCallbacks: [],
+  useMXStatic: (options?.rootIsStatic && resource.root.extensionsUsed?.includes("MX_static")) || false,
   ...options,
 });
 
 /**
- * Cache entry used internally to store the current and pending subresource.
- */
-interface GLTFSubresourceCacheEntry {
-  value?: RemoteResource;
-  promise: Promise<RemoteResource>;
-}
-
-/**
  * Map from subresource index to cache entry.
  */
-type GLTFSubresourceCache = Map<number, GLTFSubresourceCacheEntry>;
+type GLTFSubresourceCache = Map<number, RemoteResource>;
 
 type GLTFSubresourceLoader<
   LoaderContext extends GLTFResource | GLTFLoaderContext,
   Prop extends GLTFChildOfRootProperty,
   Subresource extends RemoteResource,
   Options
-> = (loaderCtx: LoaderContext, property: Prop, index: number, options?: Options) => Promise<Subresource>;
+> = (loaderCtx: LoaderContext, property: Prop, index: number, options?: Options) => Subresource;
 
 function loadSubresource<
   LoaderContext extends GLTFResource | GLTFLoaderContext,
@@ -428,7 +463,7 @@ function loadSubresource<
   loader: GLTFSubresourceLoader<LoaderContext, Prop, Subresource, Options>,
   index: number,
   options?: Options
-): Promise<Subresource> {
+): Subresource {
   const properties = selector(resource.root);
   const property = properties ? properties[index] : undefined;
 
@@ -443,40 +478,21 @@ function loadSubresource<
     caches.set(key, cache);
   }
 
-  const result = cache.get(index);
+  let subresource = cache.get(index);
 
-  if (result) {
-    return result.promise as Promise<Subresource>;
+  if (subresource) {
+    return subresource as Subresource;
   }
 
-  const promise = loader(loaderCtx, property, index, options).then((value) => {
-    const cache = caches.get(key);
+  subresource = loader(loaderCtx, property, index, options);
 
-    if (!cache) {
-      return value;
-    }
+  if (shouldAddRef) {
+    subresource.addRef();
+  }
 
-    const result = cache.get(index);
+  cache.set(index, subresource);
 
-    if (!result) {
-      return value;
-    }
-
-    result.value = value;
-
-    if (shouldAddRef) {
-      value.addRef();
-    }
-
-    return value;
-  });
-
-  cache.set(index, {
-    promise,
-    value: undefined,
-  });
-
-  return promise as Promise<Subresource>;
+  return subresource as Subresource;
 }
 
 /**
@@ -489,7 +505,7 @@ const createInstancedSubresourceLoader =
     selector: (root: GLTFRoot) => Prop[] | undefined,
     loader: GLTFSubresourceLoader<GLTFLoaderContext, Prop, Subresource, Options>
   ) =>
-  (loaderCtx: GLTFLoaderContext, index: number, options?: Options): Promise<Subresource> =>
+  (loaderCtx: GLTFLoaderContext, index: number, options?: Options): Subresource =>
     loadSubresource(loaderCtx, loaderCtx.tempCache, false, loaderCtx.resource, key, selector, loader, index, options);
 
 /**
@@ -502,14 +518,28 @@ const createCachedSubresourceLoader =
     selector: (root: GLTFRoot) => Prop[] | undefined,
     loader: GLTFSubresourceLoader<GLTFResource, Prop, Subresource, Options>
   ) =>
-  (resource: GLTFResource, index: number, options?: Options): Promise<Subresource> =>
+  (resource: GLTFResource, index: number, options?: Options): Subresource =>
     loadSubresource(resource, resource.caches, true, resource, key, selector, loader, index, options);
 
 function resolveGLTFURI(resource: GLTFResource, uri: string) {
   return resolveURL(resource.fileMap.get(uri) || uri, resource.baseUrl);
 }
 
-type GLTFPostLoadCallback = () => Promise<void>;
+type GLTFPostLoadCallback = () => void;
+
+function loadGLTFComponentDefinitions(resourceManager: RemoteResourceManager, extension: GLTFComponentDefinitions) {
+  for (const componentDef of extension.definitions) {
+    const componentId = resourceManager.nextComponentId++;
+    resourceManager.componentDefinitions.set(componentId, componentDef);
+    resourceManager.componentIdsByName.set(componentDef.name, componentId);
+  }
+}
+
+function loadGLTFResourceExtensions(gltf: GLTFResource) {
+  if (gltf.root.extensions?.MX_components) {
+    loadGLTFComponentDefinitions(gltf.manager, gltf.root.extensions.MX_components);
+  }
+}
 
 function loadGLTFCharacterController(
   { ctx }: GLTFLoaderContext,
@@ -528,7 +558,7 @@ function loadGLTFCharacterController(
   });
 }
 
-async function loadGLTFSceneAnimations(loaderCtx: GLTFLoaderContext, remoteSceneOrNode: RemoteScene | RemoteNode) {
+function loadGLTFSceneAnimations(loaderCtx: GLTFLoaderContext, remoteSceneOrNode: RemoteScene | RemoteNode) {
   const { ctx, resource } = loaderCtx;
   const animationDefs = resource.root.animations || [];
 
@@ -589,28 +619,31 @@ async function loadGLTFSceneAnimations(loaderCtx: GLTFLoaderContext, remoteScene
       parentObj.add(obj);
     });
 
-    const animations = await Promise.all(animationDefs.map((v, i) => loadGLTFAnimation(loaderCtx, i)));
+    const animations = animationDefs.map((v, i) => loadGLTFAnimation(loaderCtx, i));
     const mixer = new AnimationMixer(rootObj);
-    const actions = new Map<string, AnimationAction>();
+    const actionMap = new Map<string, AnimationAction>();
+    const actions: AnimationAction[] = [];
     for (const animation of animations) {
       const action = mixer.clipAction(animation.clip as AnimationClip).play();
       action.enabled = false;
-      actions.set(animation.name, action);
+      actionMap.set(animation.name, action);
+      actions.push(action);
     }
     addComponent(world, AnimationComponent, remoteSceneOrNode.eid);
     AnimationComponent.set(remoteSceneOrNode.eid, {
       animations,
       mixer,
+      actionMap,
       actions,
     });
   }
 }
 
-async function postLoad(loaderCtx: GLTFLoaderContext, root: RemoteScene | RemoteNode) {
+function postLoad(loaderCtx: GLTFLoaderContext, root: RemoteScene | RemoteNode) {
   updateMatrixWorld(root, true);
 
   for (const postLoadCallback of loaderCtx.postLoadCallbacks) {
-    await postLoadCallback();
+    postLoadCallback();
   }
 }
 
@@ -622,20 +655,20 @@ interface GLTFSceneOptions {
 const loadGLTFScene = createInstancedSubresourceLoader(
   "scene",
   (root) => root.scenes,
-  async (loaderCtx, { name, nodes: nodeIndices, extensions }, index, options?: GLTFSceneOptions) => {
+  (loaderCtx, { name, nodes: nodeIndices, extensions }, index, options?: GLTFSceneOptions) => {
     const resource = loaderCtx.resource;
 
-    const nodes = nodeIndices ? await Promise.all(nodeIndices.map((index) => loadGLTFNode(loaderCtx, index))) : [];
+    const nodes = nodeIndices ? nodeIndices.map((index) => loadGLTFNode(loaderCtx, index)) : [];
 
     let remoteSceneOrNode: RemoteScene | RemoteNode | undefined;
 
     if (options?.existingNode) {
       remoteSceneOrNode = options.existingNode;
     } else {
-      const { audioEmitters, backgroundTexture, reflectionProbe } = await promiseObject({
+      const { audioEmitters, backgroundTexture, reflectionProbe } = {
         audioEmitters:
           extensions?.KHR_audio?.emitters !== undefined
-            ? Promise.all(extensions.KHR_audio.emitters.map((index) => loadGLTFAudioEmitter(resource, index)))
+            ? extensions.KHR_audio.emitters.map((index) => loadGLTFAudioEmitter(resource, index))
             : undefined,
         backgroundTexture: extensions?.MX_background?.backgroundTexture
           ? loadGLTFTexture(resource, extensions.MX_background.backgroundTexture.index, {
@@ -647,7 +680,7 @@ const loadGLTFScene = createInstancedSubresourceLoader(
         reflectionProbe: extensions?.MX_reflection_probes
           ? loadGLTFReflectionProbe(resource, extensions.MX_reflection_probes.reflectionProbe)
           : undefined,
-      });
+      };
 
       const bloom = extensions?.MX_postprocessing?.bloom;
 
@@ -696,31 +729,26 @@ const loadGLTFScene = createInstancedSubresourceLoader(
     }
 
     if (resource.root.animations && resource.root.animations.length > 0) {
-      await loadGLTFSceneAnimations(loaderCtx, remoteSceneOrNode);
+      loadGLTFSceneAnimations(loaderCtx, remoteSceneOrNode);
     }
 
     return remoteSceneOrNode;
   }
 );
 
-async function loadGLTFInstancedMesh(
-  resource: GLTFResource,
-  extension: GLTFInstancedMeshExtension
-): Promise<RemoteInstancedMesh> {
-  const attributesPromises: { [key: string]: Promise<RemoteAccessor> } = {};
+function loadGLTFInstancedMesh(resource: GLTFResource, extension: GLTFInstancedMeshExtension): RemoteInstancedMesh {
+  const attributes: { [key: string]: RemoteAccessor } = {};
 
   for (const key in extension.attributes) {
     const index = InstancedMeshAttributeToIndices[key];
-    attributesPromises[index] = loadGLTFAccessor(resource, extension.attributes[key]);
+    attributes[index] = loadGLTFAccessor(resource, extension.attributes[key]);
   }
-
-  const attributes = await promiseObject(attributesPromises);
 
   return new RemoteInstancedMesh(resource.manager, { attributes });
 }
 
-async function loadGLTFLightMap(resource: GLTFResource, extension: GLTFLightmap): Promise<RemoteLightMap> {
-  const texture = await loadGLTFTexture(resource, extension.lightMapTexture.index, {
+function loadGLTFLightMap(resource: GLTFResource, extension: GLTFLightmap): RemoteLightMap {
+  const texture = loadGLTFTexture(resource, extension.lightMapTexture.index, {
     encoding: TextureEncoding.Linear,
   });
 
@@ -730,6 +758,76 @@ async function loadGLTFLightMap(resource: GLTFResource, extension: GLTFLightmap)
     offset: extension.offset,
     intensity: extension.intensity,
   });
+}
+
+function loadGLTFComponents(loaderCtx: GLTFLoaderContext, extension: GLTFNodeComponents, node: RemoteNode) {
+  const resourceManager = loaderCtx.resource.manager;
+
+  for (const componentName in extension) {
+    if (componentName === "extras" || componentName === "extensions") {
+      continue;
+    }
+
+    const componentId = resourceManager.componentIdsByName.get(componentName);
+
+    if (!componentId) {
+      console.warn(`Unknown component ${componentName} defined on GLTF node ${node.name}`);
+      continue;
+    }
+
+    const componentDefinition = resourceManager.componentDefinitions.get(componentId);
+
+    if (!componentDefinition) {
+      console.warn(`Unknown component ${componentName} defined on GLTF node ${node.name}`);
+      continue;
+    }
+
+    const componentProps = extension[componentName];
+
+    const componentStore = resourceManager.componentStores.get(componentId);
+
+    if (!componentStore) {
+      console.warn(`Component store for ${componentName} not registered before gltf load. Ignoring.`);
+      continue;
+    }
+
+    componentStore.add(node.eid);
+
+    if (componentDefinition.props) {
+      const nodeIndex = resourceManager.nodeIdToComponentStoreIndex.get(node.eid) || 0;
+
+      for (const propDef of componentDefinition.props) {
+        let propValue = componentProps[propDef.name];
+
+        if (propValue === undefined) {
+          continue;
+        }
+
+        const propStore = componentStore.propsByName.get(propDef.name);
+
+        if (!propStore) {
+          console.warn(`Component ${componentDefinition.name} does not have a property ${propDef.name}. Ignoring.`);
+          continue;
+        }
+
+        if (propDef.type === "ref") {
+          if (propDef.refType === "node") {
+            const refNode = loadGLTFNode(loaderCtx, propValue as number);
+            propValue = refNode.eid;
+          } else {
+            console.warn(`Unknown ref type ${propDef.refType} for prop ${propDef.name}`);
+            continue;
+          }
+        } else {
+          if (propDef.size === 1) {
+            propStore[nodeIndex] = propValue as number;
+          } else {
+            (propStore[nodeIndex] as TypedArray32).set(propValue as number[]);
+          }
+        }
+      }
+    }
+  }
 }
 
 function loadGLTFHubsComponents(loaderCtx: GLTFLoaderContext, extension: GLTFHubsComponents, node: RemoteNode): void {
@@ -752,7 +850,7 @@ function loadGLTFHubsComponents(loaderCtx: GLTFLoaderContext, extension: GLTFHub
       type: CameraType.Perspective,
       yfov: glMatrix.toRadian(75),
       znear: 0.1,
-      zfar: 2000,
+      zfar: 200000,
     });
 
     loaderCtx.ctx.worldResource.activeCameraNode = node;
@@ -799,96 +897,126 @@ function addTrimeshFromMesh(loaderCtx: GLTFLoaderContext, node: RemoteNode, mesh
 
     const primitiveNode = new RemoteNode(loaderCtx.resource.manager);
     addChild(node, primitiveNode);
-    addRigidBody(loaderCtx.ctx, primitiveNode, rigidBody, mesh, primitive);
+
+    const physics = getModule(loaderCtx.ctx, PhysicsModule);
+    addPhysicsBody(
+      loaderCtx.ctx.world,
+      physics,
+      primitiveNode,
+      new RemotePhysicsBody(loaderCtx.resource.manager, {
+        type: PhysicsBodyType.Static,
+        mass: 1,
+      })
+    );
+
+    if (mesh) {
+      addResourceRef(loaderCtx.ctx, mesh.eid);
+      primitiveNode.physicsBody!.mesh = mesh;
+    }
+
+    if (primitive) {
+      addResourceRef(loaderCtx.ctx, primitive.eid);
+      primitiveNode.physicsBody!.primitive = primitive;
+    }
   }
 }
 
-const tempPosition = vec3.create();
-const tempRotation = quat.create();
-const tempScale = vec3.create();
+const gltfColliderTypeToColliderType: { [key: string]: ColliderType } = {
+  box: ColliderType.Box,
+  sphere: ColliderType.Sphere,
+  capsule: ColliderType.Capsule,
+  cylinder: ColliderType.Cylinder,
+  mesh: ColliderType.Trimesh,
+};
 
-async function loadGLTFCollider(loaderCtx: GLTFLoaderContext, node: RemoteNode, extension: GLTFColliderRef) {
-  const { resource, ctx } = loaderCtx;
-  const colliderIndex = extension.collider;
+const loadGLTFCollider = createCachedSubresourceLoader(
+  "collider",
+  (root) => root.extensions?.OMI_collider?.colliders,
+  (resource, props, index) => {
+    const { name, type: typeStr, extents, size, radius, height, isTrigger, mesh: meshIndex } = props;
 
-  if (colliderIndex === undefined) {
-    console.warn(`No collider on node "${node.name}"`);
-    return;
+    let mesh: RemoteMesh | undefined;
+
+    if (meshIndex !== undefined) {
+      mesh = loadGLTFMesh(resource, meshIndex);
+    }
+
+    const type = gltfColliderTypeToColliderType[typeStr];
+
+    if (type === undefined) {
+      throw new Error(`Unknown collider type ${typeStr}`);
+    }
+
+    return new RemoteCollider(resource.manager, {
+      name,
+      type,
+      size: extents !== undefined ? [extents[0] * 2, extents[1] * 2, extents[2] * 2] : size,
+      radius,
+      height,
+      mesh,
+      isTrigger,
+    });
+  }
+);
+
+function loadDefaultGLTFPhysicsBody(loaderCtx: GLTFLoaderContext, node: RemoteNode) {
+  const physics = getModule(loaderCtx.ctx, PhysicsModule);
+
+  let parentIsPhysicsBody = false;
+
+  if (node.parent) {
+    const parentIndex = loaderCtx.nodeIndexMap.get(node.parent);
+
+    if (parentIndex === undefined) {
+      throw new Error(`Parent node not found for node ${node.name}`);
+    }
+
+    const parentNodeDef = loaderCtx.resource.root.nodes ? loaderCtx.resource.root.nodes[parentIndex] : undefined;
+
+    if (parentNodeDef?.extensions?.OMI_physics_body) {
+      parentIsPhysicsBody = true;
+    }
   }
 
-  const colliders = resource.root.extensions?.OMI_collider?.colliders;
+  if (!parentIsPhysicsBody) {
+    addPhysicsBody(
+      loaderCtx.ctx.world,
+      physics,
+      node,
+      new RemotePhysicsBody(loaderCtx.resource.manager, {
+        type: PhysicsBodyType.Static,
+        mass: 1,
+      })
+    );
+  }
+}
 
-  if (!colliders) {
-    return;
+const gltfPhysicsBodyTypeToPhysicsBodyType: { [key: string]: PhysicsBodyType } = {
+  static: PhysicsBodyType.Static,
+  kinematic: PhysicsBodyType.Kinematic,
+  rigid: PhysicsBodyType.Rigid,
+};
+
+function loadGLTFPhysicsBody(loaderCtx: GLTFLoaderContext, node: RemoteNode, physicsBodyDef: GLTFPhysicsBody) {
+  const type = gltfPhysicsBodyTypeToPhysicsBodyType[physicsBodyDef.type];
+
+  if (type === undefined) {
+    throw new Error(`Unknown physics body type ${physicsBodyDef.type}`);
   }
 
-  const collider = colliders[colliderIndex];
-
-  if (!collider) {
-    console.warn(`Collider "${colliderIndex}" not found.`);
-  }
-
-  const physics = getModule(ctx, PhysicsModule);
-  const { physicsWorld } = physics;
-
-  const worldMatrix = node.worldMatrix;
-  mat4.getTranslation(tempPosition, worldMatrix);
-  mat4.getRotation(tempRotation, worldMatrix);
-  mat4.getScaling(tempScale, worldMatrix);
-
-  let colliderDesc: ColliderDesc;
-
-  if (collider.type === "box") {
-    if (!collider.extents) {
-      console.warn(`Ignoring box collider ${colliderIndex} without extents property`);
-      return;
-    }
-
-    vec3.mul(tempScale, tempScale, collider.extents as vec3);
-    colliderDesc = RAPIER.ColliderDesc.cuboid(tempScale[0], tempScale[1], tempScale[2]);
-  } else if (collider.type === "sphere") {
-    if (collider.radius === undefined) {
-      console.warn(`Ignoring sphere collider ${colliderIndex} without radius property`);
-      return;
-    }
-
-    colliderDesc = RAPIER.ColliderDesc.ball(collider.radius * tempScale[0]);
-  } else if (collider.type === "capsule") {
-    if (collider.radius === undefined) {
-      console.warn(`Ignoring capsule collider ${colliderIndex} without radius property`);
-      return;
-    }
-
-    if (collider.height === undefined) {
-      console.warn(`Ignoring capsule collider ${colliderIndex} without height property`);
-      return;
-    }
-
-    colliderDesc = RAPIER.ColliderDesc.capsule((collider.height / 2) * tempScale[0], collider.radius * tempScale[0]);
-  } else if (collider.type === "mesh") {
-    if (collider.mesh === undefined) {
-      console.warn(`Ignoring mesh collider ${colliderIndex} without mesh.`);
-      return;
-    }
-
-    const colliderMesh = await loadGLTFMesh(resource, collider.mesh);
-    addTrimeshFromMesh(loaderCtx, node, colliderMesh);
-
-    return;
-  } else {
-    console.warn(`Unsupported collider type ${collider.type}`);
-    return;
-  }
-
-  const rigidBodyDesc = RAPIER.RigidBodyDesc.fixed();
-  rigidBodyDesc.setTranslation(tempPosition[0], tempPosition[1], tempPosition[2]);
-  rigidBodyDesc.setRotation(new RAPIER.Quaternion(tempRotation[0], tempRotation[1], tempRotation[2], tempRotation[3]));
-  const rigidBody = physicsWorld.createRigidBody(rigidBodyDesc);
-
-  colliderDesc.setCollisionGroups(staticRigidBodyCollisionGroups);
-  physicsWorld.createCollider(colliderDesc, rigidBody);
-
-  addRigidBody(ctx, node, rigidBody);
+  const physics = getModule(loaderCtx.ctx, PhysicsModule);
+  addPhysicsBody(
+    loaderCtx.ctx.world,
+    physics,
+    node,
+    new RemotePhysicsBody(loaderCtx.resource.manager, {
+      type,
+      mass: physicsBodyDef.mass,
+      linearVelocity: physicsBodyDef.linearVelocity,
+      angularVelocity: physicsBodyDef.angularVelocity,
+      inertiaTensor: physicsBodyDef.inertiaTensor,
+    })
+  );
 }
 
 function loadGLTFTilesRenderer({ resource }: GLTFLoaderContext, node: RemoteNode, extension: GLTFTilesRenderer) {
@@ -908,9 +1036,8 @@ function loadGLTFPortal({ ctx }: GLTFLoaderContext, node: RemoteNode, extension:
 const loadGLTFNode = createInstancedSubresourceLoader(
   "node",
   (root) => root.nodes,
-  async (
-    loaderCtx,
-    {
+  (loaderCtx, nodeDef, index) => {
+    const {
       name,
       translation,
       rotation,
@@ -920,17 +1047,15 @@ const loadGLTFNode = createInstancedSubresourceLoader(
       camera: cameraIndex,
       mesh: meshIndex,
       skin: skinIndex,
-      weights,
       extensions,
-    },
-    index
-  ) => {
+    } = nodeDef;
+
     const resource = loaderCtx.resource;
 
     let children: RemoteNode[] | undefined;
 
     if (childIndices) {
-      children = await Promise.all(childIndices.map((index) => loadGLTFNode(loaderCtx, index)));
+      children = childIndices.map((index) => loadGLTFNode(loaderCtx, index));
     }
 
     const node = new RemoteNode(resource.manager, {
@@ -943,7 +1068,7 @@ const loadGLTFNode = createInstancedSubresourceLoader(
     if (matrix) {
       node.localMatrix.set(matrix);
       mat4.getTranslation(node.position, node.localMatrix);
-      mat4.getRotation(node.quaternion, node.localMatrix);
+      getRotationNoAlloc(node.quaternion, node.localMatrix);
       mat4.getScaling(node.scale, node.localMatrix);
     } else {
       if (translation) node.position.set(translation);
@@ -958,31 +1083,30 @@ const loadGLTFNode = createInstancedSubresourceLoader(
       }
     }
 
-    loaderCtx.postLoadCallbacks.push(async () => {
-      const { mesh, skin, instancedMesh, lightMap, camera, light, audioEmitter, reflectionProbe } = await promiseObject(
-        {
-          mesh: meshIndex !== undefined ? loadGLTFMesh(resource, meshIndex) : undefined,
-          skin: skinIndex !== undefined ? loadGLTFSkin(loaderCtx, skinIndex) : undefined,
-          instancedMesh:
-            extensions?.EXT_mesh_gpu_instancing !== undefined
-              ? loadGLTFInstancedMesh(resource, extensions?.EXT_mesh_gpu_instancing)
-              : undefined,
-          lightMap:
-            extensions?.MX_lightmap !== undefined ? loadGLTFLightMap(resource, extensions.MX_lightmap) : undefined,
-          camera: cameraIndex !== undefined ? loadGLTFCamera(resource, cameraIndex) : undefined,
-          light:
-            extensions?.KHR_lights_punctual?.light !== undefined
-              ? loadGLTFLight(resource, extensions.KHR_lights_punctual.light)
-              : undefined,
-          audioEmitter:
-            extensions?.KHR_audio?.emitter !== undefined
-              ? loadGLTFAudioEmitter(resource, extensions.KHR_audio.emitter, loaderCtx.audioOutput)
-              : undefined,
-          reflectionProbe: extensions?.MX_reflection_probes
-            ? loadGLTFReflectionProbe(resource, extensions.MX_reflection_probes.reflectionProbe)
+    loaderCtx.postLoadCallbacks.push(() => {
+      const { mesh, skin, instancedMesh, lightMap, camera, light, audioEmitter, reflectionProbe, collider } = {
+        mesh: meshIndex !== undefined ? loadGLTFMesh(resource, meshIndex) : undefined,
+        skin: skinIndex !== undefined ? loadGLTFSkin(loaderCtx, skinIndex) : undefined,
+        instancedMesh:
+          extensions?.EXT_mesh_gpu_instancing !== undefined
+            ? loadGLTFInstancedMesh(resource, extensions?.EXT_mesh_gpu_instancing)
             : undefined,
-        }
-      );
+        lightMap:
+          extensions?.MX_lightmap !== undefined ? loadGLTFLightMap(resource, extensions.MX_lightmap) : undefined,
+        camera: cameraIndex !== undefined ? loadGLTFCamera(resource, cameraIndex) : undefined,
+        light:
+          extensions?.KHR_lights_punctual?.light !== undefined
+            ? loadGLTFLight(resource, extensions.KHR_lights_punctual.light)
+            : undefined,
+        audioEmitter:
+          extensions?.KHR_audio?.emitter !== undefined
+            ? loadGLTFAudioEmitter(resource, extensions.KHR_audio.emitter, loaderCtx.audioOutput)
+            : undefined,
+        reflectionProbe: extensions?.MX_reflection_probes
+          ? loadGLTFReflectionProbe(resource, extensions.MX_reflection_probes.reflectionProbe)
+          : undefined,
+        collider: extensions?.OMI_collider ? loadGLTFCollider(resource, extensions.OMI_collider.collider) : undefined,
+      };
 
       node.mesh = mesh;
       node.skin = skin;
@@ -992,6 +1116,11 @@ const loadGLTFNode = createInstancedSubresourceLoader(
       node.light = light;
       node.audioEmitter = audioEmitter;
       node.reflectionProbe = reflectionProbe;
+      node.collider = collider;
+
+      if (extensions?.MX_components) {
+        loadGLTFComponents(loaderCtx, extensions.MX_components, node);
+      }
 
       if (extensions?.MOZ_hubs_components) {
         loadGLTFHubsComponents(loaderCtx, extensions.MOZ_hubs_components, node);
@@ -1007,8 +1136,10 @@ const loadGLTFNode = createInstancedSubresourceLoader(
         loadGLTFSpawnPoint(loaderCtx, node);
       }
 
-      if (extensions?.OMI_collider) {
-        await loadGLTFCollider(loaderCtx, node, extensions.OMI_collider);
+      if (extensions?.OMI_physics_body) {
+        loadGLTFPhysicsBody(loaderCtx, node, extensions.OMI_physics_body);
+      } else if (extensions?.OMI_collider) {
+        loadDefaultGLTFPhysicsBody(loaderCtx, node);
       }
 
       if (extensions?.MX_tiles_renderer) {
@@ -1022,6 +1153,19 @@ const loadGLTFNode = createInstancedSubresourceLoader(
       if (extensions?.MX_portal) {
         loadGLTFPortal(loaderCtx, node, extensions.MX_portal);
       }
+
+      if (extensions?.MX_static) {
+        node.isStatic = loaderCtx.useMXStatic;
+      }
+
+      if (extensions?.MX_lights_shadows) {
+        const { castShadow, receiveShadow } = extensions.MX_lights_shadows;
+        node.castShadow = castShadow;
+        node.receiveShadow = receiveShadow;
+      } else {
+        node.castShadow = false;
+        node.receiveShadow = false;
+      }
     });
 
     return node;
@@ -1031,18 +1175,10 @@ const loadGLTFNode = createInstancedSubresourceLoader(
 const loadGLTFBuffer = createCachedSubresourceLoader(
   "buffer",
   (root) => root.buffers,
-  async (resource, { name, uri }, index) => {
-    let data: SharedArrayBuffer;
+  (resource, { name, uri }, index) => {
+    const data = resource.buffers.get(index);
 
-    if (uri) {
-      const filePath = resource.fileMap.get(uri) || uri;
-      const url = resolveURL(filePath, resource.baseUrl);
-      const response = await fetch(url);
-      const bufferData = await response.arrayBuffer();
-      data = toSharedArrayBuffer(bufferData);
-    } else if (index === 0 && resource.binaryChunk) {
-      data = resource.binaryChunk;
-    } else {
+    if (!data) {
       throw new Error(`Invalid buffer at index ${index}`);
     }
 
@@ -1057,8 +1193,8 @@ const loadGLTFBuffer = createCachedSubresourceLoader(
 const loadGLTFBufferView = createCachedSubresourceLoader(
   "bufferView",
   (root) => root.bufferViews,
-  async (resource, { name, buffer: bufferIndex, byteOffset, byteStride, byteLength, target }) => {
-    const buffer = await loadGLTFBuffer(resource, bufferIndex);
+  (resource, { name, buffer: bufferIndex, byteOffset, byteStride, byteLength, target }) => {
+    const buffer = loadGLTFBuffer(resource, bufferIndex);
 
     return new RemoteBufferView(resource.manager, {
       name,
@@ -1078,7 +1214,7 @@ interface ImageOptions {
 const loadGLTFImage = createCachedSubresourceLoader(
   "image",
   (root) => root.images,
-  async (resource, { name, uri, bufferView: bufferViewIndex, mimeType }, index, options?: ImageOptions) => {
+  (resource, { name, uri, bufferView: bufferViewIndex, mimeType }, index, options?: ImageOptions) => {
     if (uri) {
       const filePath = resource.fileMap.get(uri) || uri;
       const resolvedUri = resolveURL(filePath, resource.baseUrl);
@@ -1092,7 +1228,7 @@ const loadGLTFImage = createCachedSubresourceLoader(
         throw new Error(`Image ${index} has a bufferView but no mimeType`);
       }
 
-      const bufferView = await loadGLTFBufferView(resource, bufferViewIndex);
+      const bufferView = loadGLTFBufferView(resource, bufferViewIndex);
 
       return new RemoteImage(resource.manager, {
         name,
@@ -1113,7 +1249,7 @@ interface SamplerOptions {
 const loadGLTFSampler = createCachedSubresourceLoader(
   "sampler",
   (root) => root.samplers,
-  async (resource, { name, magFilter, minFilter, wrapS, wrapT }, index, options?: SamplerOptions) => {
+  (resource, { name, magFilter, minFilter, wrapS, wrapT }, index, options?: SamplerOptions) => {
     return new RemoteSampler(resource.manager, {
       name,
       magFilter,
@@ -1134,14 +1270,14 @@ interface TextureOptions {
 const loadGLTFTexture = createCachedSubresourceLoader(
   "texture",
   (root) => root.textures,
-  async (resource, texture, index, options?: TextureOptions) => {
+  (resource, texture, index, options?: TextureOptions) => {
     const basisSourceIndex = texture.extensions?.KHR_texture_basisu?.source;
 
     if (texture.source === undefined && basisSourceIndex === undefined) {
       throw new Error(`texture[${index}].source is undefined.`);
     }
 
-    const { source, sampler } = await promiseObject({
+    const { source, sampler } = {
       source:
         basisSourceIndex !== undefined
           ? loadGLTFImage(resource, basisSourceIndex)
@@ -1152,7 +1288,7 @@ const loadGLTFTexture = createCachedSubresourceLoader(
         texture.sampler !== undefined
           ? loadGLTFSampler(resource, texture.sampler, { mapping: options?.mapping })
           : undefined,
-    });
+    };
 
     if (!source) {
       throw new Error(`No image source found for texture[${index}]`);
@@ -1181,7 +1317,7 @@ const GLTFAlphaModes: { [key: string]: MaterialAlphaMode } = {
 const loadGLTFMaterial = createCachedSubresourceLoader(
   "material",
   (root) => root.materials,
-  async (
+  (
     resource,
     {
       name,
@@ -1197,14 +1333,14 @@ const loadGLTFMaterial = createCachedSubresourceLoader(
     }
   ) => {
     if (extensions?.KHR_materials_unlit) {
-      const { baseColorTexture } = await promiseObject({
+      const { baseColorTexture } = {
         baseColorTexture:
           pbrMetallicRoughness?.baseColorTexture?.index !== undefined
             ? loadGLTFTexture(resource, pbrMetallicRoughness.baseColorTexture.index, {
                 encoding: TextureEncoding.sRGB,
               })
             : undefined,
-      });
+      };
 
       return new RemoteMaterial(resource.manager, {
         type: MaterialType.Unlit,
@@ -1232,7 +1368,7 @@ const loadGLTFMaterial = createCachedSubresourceLoader(
         emissiveTexture: _emissiveTexture,
         transmissionTexture,
         thicknessTexture,
-      } = await promiseObject({
+      } = {
         baseColorTexture:
           pbrMetallicRoughness?.baseColorTexture?.index !== undefined
             ? loadGLTFTexture(resource, pbrMetallicRoughness?.baseColorTexture?.index, {
@@ -1254,7 +1390,7 @@ const loadGLTFMaterial = createCachedSubresourceLoader(
           ? loadGLTFTexture(resource, transmissionTextureInfo.index)
           : undefined,
         thicknessTexture: thicknessTextureInfo ? loadGLTFTexture(resource, thicknessTextureInfo.index) : undefined,
-      });
+      };
 
       const baseColorTransform = pbrMetallicRoughness?.baseColorTexture?.extensions?.KHR_texture_transform;
       const metallicRoughnessTransform =
@@ -1329,21 +1465,21 @@ const GLTFAccessorTypeToAccessorType: { [key: string]: AccessorType } = {
 const loadGLTFAccessor = createCachedSubresourceLoader(
   "accessor",
   (root) => root.accessors,
-  async (
+  (
     resource,
     { name, bufferView: bufferViewIndex, type, componentType, count, byteOffset, normalized, min, max, sparse }
   ) => {
-    const { bufferView } = await promiseObject({
+    const { bufferView } = {
       bufferView: bufferViewIndex !== undefined ? loadGLTFBufferView(resource, bufferViewIndex) : undefined,
-    });
+    };
 
     let sparseAccessor: RemoteSparseAccessor | undefined = undefined;
 
     if (sparse) {
-      const { values, indices } = await promiseObject({
+      const { values, indices } = {
         values: loadGLTFBufferView(resource, sparse.values.bufferView),
         indices: loadGLTFBufferView(resource, sparse.indices.bufferView),
-      });
+      };
 
       sparseAccessor = new RemoteSparseAccessor(resource.manager, {
         count: sparse.count,
@@ -1389,22 +1525,18 @@ const InstancedMeshAttributeToIndices: { [key: string]: InstancedMeshAttributeIn
   _LIGHTMAP_SCALE: InstancedMeshAttributeIndex.LIGHTMAP_SCALE,
 };
 
-async function loadGLTFMeshPrimitive(
-  resource: GLTFResource,
-  primitive: GLTFMeshPrimitive
-): Promise<RemoteMeshPrimitive> {
-  const attributesPromises: { [key: string]: Promise<RemoteAccessor> } = {};
+function loadGLTFMeshPrimitive(resource: GLTFResource, primitive: GLTFMeshPrimitive): RemoteMeshPrimitive {
+  const attributes: { [key: string]: RemoteAccessor } = {};
 
   for (const key in primitive.attributes) {
     const index = MeshPrimitiveAttributesToIndices[key];
-    attributesPromises[index] = loadGLTFAccessor(resource, primitive.attributes[key]);
+    attributes[index] = loadGLTFAccessor(resource, primitive.attributes[key]);
   }
 
-  const { indices, attributes, material } = await promiseObject({
+  const { indices, material } = {
     indices: primitive.indices !== undefined ? loadGLTFAccessor(resource, primitive.indices) : undefined,
-    attributes: promiseObject(attributesPromises),
     material: primitive.material !== undefined ? loadGLTFMaterial(resource, primitive.material) : undefined,
-  });
+  };
 
   return new RemoteMeshPrimitive(resource.manager, {
     indices,
@@ -1417,10 +1549,8 @@ async function loadGLTFMeshPrimitive(
 const loadGLTFMesh = createCachedSubresourceLoader(
   "mesh",
   (root) => root.meshes,
-  async (resource, { name, primitives: primitiveDefs }) => {
-    const primitives: RemoteMeshPrimitive[] = await Promise.all(
-      primitiveDefs.map((primitive) => loadGLTFMeshPrimitive(resource, primitive))
-    );
+  (resource, { name, primitives: primitiveDefs }) => {
+    const primitives = primitiveDefs.map((primitive) => loadGLTFMeshPrimitive(resource, primitive));
 
     return new RemoteMesh(resource.manager, {
       name,
@@ -1432,13 +1562,13 @@ const loadGLTFMesh = createCachedSubresourceLoader(
 const loadGLTFSkin = createInstancedSubresourceLoader(
   "skin",
   (root) => root.skins,
-  async (
+  (
     loaderCtx,
     { name, inverseBindMatrices: inverseBindMatricesIndex, skeleton: skeletonIndex, joints: jointIndices },
     index
   ) => {
     const inverseBindMatrices = inverseBindMatricesIndex
-      ? await loadGLTFAccessor(loaderCtx.resource, inverseBindMatricesIndex)
+      ? loadGLTFAccessor(loaderCtx.resource, inverseBindMatricesIndex)
       : undefined;
 
     const joints = jointIndices.map((index) => {
@@ -1462,7 +1592,7 @@ const loadGLTFSkin = createInstancedSubresourceLoader(
 const loadGLTFCamera = createCachedSubresourceLoader(
   "camera",
   (root) => root.cameras,
-  async (resource, camera) => {
+  (resource, camera) => {
     if (camera.perspective) {
       return new RemoteCamera(resource.manager, {
         name: camera.name,
@@ -1496,7 +1626,7 @@ const GLTFLightTypeToLightType: { [key: string]: LightType } = {
 const loadGLTFLight = createCachedSubresourceLoader(
   "light",
   (root) => root.extensions?.KHR_lights_punctual?.lights,
-  async (resource, { name, type, color, intensity, range, spot }) => {
+  (resource, { name, type, color, intensity, range, spot }) => {
     return new RemoteLight(resource.manager, {
       name,
       type: GLTFLightTypeToLightType[type],
@@ -1512,9 +1642,9 @@ const loadGLTFLight = createCachedSubresourceLoader(
 const loadGLTFReflectionProbe = createCachedSubresourceLoader(
   "reflection-probe",
   (root) => root.extensions?.MX_reflection_probes?.reflectionProbes,
-  async (resource, { reflectionProbeTexture, size }) => {
+  (resource, { reflectionProbeTexture, size }) => {
     return new RemoteReflectionProbe(resource.manager, {
-      reflectionProbeTexture: await loadGLTFTexture(resource, reflectionProbeTexture.index, {
+      reflectionProbeTexture: loadGLTFTexture(resource, reflectionProbeTexture.index, {
         mapping: SamplerMapping.EquirectangularReflectionMapping,
         flipY: true,
       }),
@@ -1526,7 +1656,7 @@ const loadGLTFReflectionProbe = createCachedSubresourceLoader(
 const loadGLTFAudioData = createCachedSubresourceLoader(
   "audio",
   (root) => root.extensions?.KHR_audio?.audio,
-  async (resource, { name, uri, bufferView, mimeType }, index) => {
+  (resource, { name, uri, bufferView, mimeType }, index) => {
     if (uri) {
       return new RemoteAudioData(resource.manager, {
         name,
@@ -1539,7 +1669,7 @@ const loadGLTFAudioData = createCachedSubresourceLoader(
 
       return new RemoteAudioData(resource.manager, {
         name,
-        bufferView: await loadGLTFBufferView(resource, bufferView),
+        bufferView: loadGLTFBufferView(resource, bufferView),
         mimeType,
       });
     } else {
@@ -1551,13 +1681,13 @@ const loadGLTFAudioData = createCachedSubresourceLoader(
 const loadGLTFAudioSource = createCachedSubresourceLoader(
   "audio-source",
   (root) => root.extensions?.KHR_audio?.sources,
-  async (resource, { name, gain, loop, autoPlay, audio: audioDataIndex }) => {
+  (resource, { name, gain, loop, autoPlay, audio: audioDataIndex }) => {
     return new RemoteAudioSource(resource.manager, {
       name,
       gain,
       loop,
       autoPlay,
-      audio: audioDataIndex !== undefined ? await loadGLTFAudioData(resource, audioDataIndex) : undefined,
+      audio: audioDataIndex !== undefined ? loadGLTFAudioData(resource, audioDataIndex) : undefined,
     });
   }
 );
@@ -1571,11 +1701,9 @@ const GLTFAudioEmitterDistanceModel: { [key: string]: AudioEmitterDistanceModel 
 const loadGLTFAudioEmitter = createCachedSubresourceLoader(
   "audio-emitter",
   (root) => root.extensions?.KHR_audio?.emitters,
-  async (resource, props, index, output?: AudioEmitterOutput) => {
+  (resource, props, index, output?: AudioEmitterOutput) => {
     const { name, gain, type, sources: audioSourceIndices } = props;
-    const sources = audioSourceIndices
-      ? await Promise.all(audioSourceIndices.map((index) => loadGLTFAudioSource(resource, index)))
-      : [];
+    const sources = audioSourceIndices ? audioSourceIndices.map((index) => loadGLTFAudioSource(resource, index)) : [];
 
     if (type === "global") {
       return new RemoteAudioEmitter(resource.manager, {
@@ -1616,14 +1744,14 @@ const GLTFAnimationInterpolationToAnimationInterpolation: { [key: string]: Anima
   CUBICSPLINE: AnimationSamplerInterpolation.CUBICSPLINE,
 };
 
-async function loadGLTFAnimationSampler(
+function loadGLTFAnimationSampler(
   resource: GLTFResource,
   { input: inputIndex, output: outputIndex, interpolation }: GLTFAnimationSampler
 ) {
-  const { input, output } = await promiseObject({
+  const { input, output } = {
     input: loadGLTFAccessor(resource, inputIndex),
     output: loadGLTFAccessor(resource, outputIndex),
-  });
+  };
 
   return new RemoteAnimationSampler(resource.manager, {
     input,
@@ -1639,12 +1767,12 @@ const GLTFAnimationTargetPathToAnimationTargetPath: { [key: string]: AnimationCh
   weights: AnimationChannelTargetPath.Weights,
 };
 
-async function loadGLTFAnimationChannel(
+function loadGLTFAnimationChannel(
   loaderCtx: GLTFLoaderContext,
   samplerDefs: GLTFAnimationSampler[],
   { sampler: samplerIndex, target }: GLTFAnimationChannel
 ) {
-  const sampler = await loadGLTFAnimationSampler(loaderCtx.resource, samplerDefs[samplerIndex]);
+  const sampler = loadGLTFAnimationSampler(loaderCtx.resource, samplerDefs[samplerIndex]);
 
   let targetNode: RemoteNode | undefined = undefined;
 
@@ -1668,9 +1796,9 @@ async function loadGLTFAnimationChannel(
 const loadGLTFAnimation = createInstancedSubresourceLoader(
   "animation",
   (root) => root.animations,
-  async (loaderCtx, { name, channels: channelDefs, samplers: samplerDefs }, index) => {
-    const channels = await Promise.all(channelDefs.map((def) => loadGLTFAnimationChannel(loaderCtx, samplerDefs, def)));
-    const samplers = await Promise.all(samplerDefs.map((def) => loadGLTFAnimationSampler(loaderCtx.resource, def)));
+  (loaderCtx, { name, channels: channelDefs, samplers: samplerDefs }, index) => {
+    const channels = channelDefs.map((def) => loadGLTFAnimationChannel(loaderCtx, samplerDefs, def));
+    const samplers = samplerDefs.map((def) => loadGLTFAnimationSampler(loaderCtx.resource, def));
 
     const animation = new RemoteAnimation(loaderCtx.resource.manager, {
       name,

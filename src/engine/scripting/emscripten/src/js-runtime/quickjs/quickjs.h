@@ -712,6 +712,7 @@ JSValue JS_NewObjectProtoClass(JSContext *ctx, JSValueConst proto, JSClassID cla
 JSValue JS_NewObjectClass(JSContext *ctx, int class_id);
 JSValue JS_NewObjectProto(JSContext *ctx, JSValueConst proto);
 JSValue JS_NewObject(JSContext *ctx);
+int JS_GetClassID(JSValue obj);
 
 JS_BOOL JS_IsFunction(JSContext* ctx, JSValueConst val);
 JS_BOOL JS_IsConstructor(JSContext* ctx, JSValueConst val);
@@ -800,6 +801,7 @@ int JS_DefinePropertyGetSet(JSContext *ctx, JSValueConst this_obj,
                             int flags);
 void JS_SetOpaque(JSValue obj, void *opaque);
 void *JS_GetOpaque(JSValueConst obj, JSClassID class_id);
+void *JS_GetOpaque_UNSAFE(JSValueConst obj); // ThirdRoom: Added for polymorphic access
 void *JS_GetOpaque2(JSContext *ctx, JSValueConst obj, JSClassID class_id);
 
 /* 'buf' must be zero terminated i.e. buf[buf_len] = '\0'. */

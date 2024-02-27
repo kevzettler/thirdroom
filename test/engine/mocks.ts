@@ -2,28 +2,22 @@ import RAPIER from "@dimforge/rapier3d-compat";
 import { addEntity, createWorld } from "bitecs";
 
 import { PrefabModule, PrefabType, registerPrefab } from "../../src/engine/prefab/prefab.game";
-import { GameState } from "../../src/engine/GameTypes";
+import { GameContext } from "../../src/engine/GameTypes";
 import { NetworkModule } from "../../src/engine/network/network.game";
 import { RendererModule } from "../../src/engine/renderer/renderer.game";
 import { PhysicsModule } from "../../src/engine/physics/physics.game";
 import { createRemoteResourceManager, ResourceModule } from "../../src/engine/resource/resource.game";
-import {
-  RemoteNode,
-  RemoteScene,
-  RemoteWorld,
-  RemoteEnvironment,
-  createRemoteObject,
-} from "../../src/engine/resource/RemoteResources";
+import { RemoteNode, RemoteScene, RemoteWorld, RemoteEnvironment } from "../../src/engine/resource/RemoteResources";
 import { addChild } from "../../src/engine/component/transform";
 import { MatrixModule } from "../../src/engine/matrix/matrix.game";
 import { WebSGNetworkModule } from "../../src/engine/network/scripting.game";
 
-export function registerDefaultPrefabs(ctx: GameState) {
+export function registerDefaultPrefabs(ctx: GameContext) {
   registerPrefab(ctx, {
     name: "test-prefab",
     type: PrefabType.Object,
     create: () => {
-      return createRemoteObject(ctx, new RemoteNode(ctx.resourceManager));
+      return new RemoteNode(ctx.resourceManager);
     },
   });
 }
@@ -43,6 +37,7 @@ export const mockPostMessageTarget = () => ({
 });
 
 export const mockPhysicsState = () => ({
+  handleToEid: new Map(),
   physicsWorld: {
     createRigidBody: (body: RAPIER.RigidBodyDesc) => ({
       handle: 0,
@@ -75,6 +70,7 @@ export const mockRenderState = () => ({
 
 export const mockNetworkState = () => ({
   networkIdToEntityId: new Map(),
+  prefabToReplicator: new Map(),
 });
 
 export const mockResourceModule = () => ({
@@ -112,7 +108,7 @@ export const mockGameState = () => {
     scopes: new Map(),
     modules: new Map(),
     resourceManager: undefined as any,
-  } as unknown as GameState;
+  } as unknown as GameContext;
 
   ctx.modules.set(PhysicsModule, mockPhysicsState());
   ctx.modules.set(NetworkModule, mockNetworkState());
@@ -125,7 +121,7 @@ export const mockGameState = () => {
   // NOOP Entity
   addEntity(ctx.world);
 
-  ctx.resourceManager = createRemoteResourceManager(ctx);
+  ctx.resourceManager = createRemoteResourceManager(ctx, "global");
 
   const activeCameraNode = new RemoteNode(ctx.resourceManager, {
     name: "Camera",

@@ -16,13 +16,18 @@ import {
   SelectionChangedMessage,
   SetSelectedEntityMessage,
   ToggleSelectedEntityMessage,
+  SetPropertyMessage,
+  SetRefPropertyMessage,
+  SetRefArrayPropertyMessage,
 } from "./editor.common";
-import { IMainThreadContext } from "../MainThread";
+import { MainContext } from "../MainThread";
 import { defineModule, getModule, registerMessageHandler, Thread } from "../module/module.common";
 import { createDisposables } from "../utils/createDisposables";
 import { NOOP } from "../config.common";
 import { ResourceType } from "../resource/schema";
-import { MainNode, MainScene } from "../resource/resource.main";
+import { getLocalResources, MainNode, MainScene } from "../resource/resource.main";
+import { ILocalResourceConstructor } from "../resource/ResourceDefinition";
+import kebabToPascalCase from "../utils/kebabToPascalCase";
 
 /*********
  * Types *
@@ -67,7 +72,7 @@ export interface SelectionChangedEvent {
  ******************/
 
 // Access module-specific state by importing this context in your systems, modules, or React components
-export const EditorModule = defineModule<IMainThreadContext, EditorModuleState>({
+export const EditorModule = defineModule<MainContext, EditorModuleState>({
   name: "editor",
   async create(ctx, { waitForMessage }) {
     const { editorStateTripleBuffer } = await waitForMessage<InitializeEditorStateMessage>(
@@ -95,19 +100,20 @@ export const EditorModule = defineModule<IMainThreadContext, EditorModuleState>(
  * Systems *
  ***********/
 
-export function MainThreadEditorSystem(mainThread: IMainThreadContext) {
-  const editor = getModule(mainThread, EditorModule);
+export function MainThreadEditorSystem(ctx: MainContext) {
+  const editor = getModule(ctx, EditorModule);
 
   if (!editor.editorLoaded) {
     return;
   }
 
-  updateHierarchy(mainThread, editor);
+  updateHierarchy(ctx, editor);
 }
 
-function updateHierarchy(ctx: IMainThreadContext, editor: EditorModuleState) {
+function updateHierarchy(ctx: MainContext, editor: EditorModuleState) {
+  const publicScene = ctx.worldResource.environment?.publicScene;
   const event: HierarchyChangedEvent = {
-    scene: ctx.worldResource.environment?.publicScene && buildEditorNode(ctx.worldResource.environment.publicScene),
+    scene: publicScene && buildEditorNode(publicScene),
     activeEntity: editor.activeEntity,
     selectedEntities: editor.selectedEntities,
   };
@@ -119,7 +125,7 @@ function updateHierarchy(ctx: IMainThreadContext, editor: EditorModuleState) {
  * Message Handlers *
  ********************/
 
-function onEditorLoaded(ctx: IMainThreadContext, message: EditorLoadedMessage) {
+function onEditorLoaded(ctx: MainContext, message: EditorLoadedMessage) {
   const editor = getModule(ctx, EditorModule);
   editor.editorLoaded = true;
   editor.selectedEntities = message.selectedEntities;
@@ -132,7 +138,7 @@ function onEditorLoaded(ctx: IMainThreadContext, message: EditorLoadedMessage) {
   editor.eventEmitter.emit(EditorEventType.EditorLoaded, event);
 }
 
-function onSelectionChanged(ctx: IMainThreadContext, message: SelectionChangedMessage) {
+function onSelectionChanged(ctx: MainContext, message: SelectionChangedMessage) {
   const editor = getModule(ctx, EditorModule);
   editor.selectedEntities = message.selectedEntities;
   editor.activeEntity = message.activeEntity;
@@ -148,13 +154,13 @@ function onSelectionChanged(ctx: IMainThreadContext, message: SelectionChangedMe
  * API *
  *******/
 
-export function loadEditor(ctx: IMainThreadContext) {
+export function loadEditor(ctx: MainContext) {
   ctx.sendMessage<LoadEditorMessage>(Thread.Game, {
     type: EditorMessageType.LoadEditor,
   });
 }
 
-export function disposeEditor(ctx: IMainThreadContext) {
+export function disposeEditor(ctx: MainContext) {
   const editor = getModule(ctx, EditorModule);
   editor.editorLoaded = false;
   ctx.sendMessage<DisposeEditorMessage>(Thread.Game, {
@@ -162,35 +168,62 @@ export function disposeEditor(ctx: IMainThreadContext) {
   });
 }
 
-export function toggleSelectedEntity(ctx: IMainThreadContext, eid: number) {
+export function toggleSelectedEntity(ctx: MainContext, eid: number) {
   ctx.sendMessage<ToggleSelectedEntityMessage>(Thread.Game, {
     type: EditorMessageType.ToggleSelectedEntity,
     eid,
   });
 }
 
-export function setSelectedEntity(ctx: IMainThreadContext, eid: number) {
+export function setSelectedEntity(ctx: MainContext, eid: number) {
   ctx.sendMessage<SetSelectedEntityMessage>(Thread.Game, {
     type: EditorMessageType.SetSelectedEntity,
     eid,
   });
 }
 
-export function addSelectedEntity(ctx: IMainThreadContext, eid: number) {
+export function setProperty<T>(ctx: MainContext, eid: number, propName: string, value: T) {
+  ctx.sendMessage<SetPropertyMessage<T>>(Thread.Game, {
+    type: EditorMessageType.SetProperty,
+    eid,
+    propName,
+    value,
+  });
+}
+
+export function setRefProperty(ctx: MainContext, eid: number, propName: string, refEid: number) {
+  ctx.sendMessage<SetRefPropertyMessage>(Thread.Game, {
+    type: EditorMessageType.SetRefProperty,
+    eid,
+    propName,
+    refEid,
+  });
+}
+
+export function setRefArrayProperty(ctx: MainContext, eid: number, propName: string, refEids: number[]) {
+  ctx.sendMessage<SetRefArrayPropertyMessage>(Thread.Game, {
+    type: EditorMessageType.SetRefArrayProperty,
+    eid,
+    propName,
+    refEids,
+  });
+}
+
+export function addSelectedEntity(ctx: MainContext, eid: number) {
   ctx.sendMessage<AddSelectedEntityMessage>(Thread.Game, {
     type: EditorMessageType.AddSelectedEntity,
     eid,
   });
 }
 
-export function focusEntity(ctx: IMainThreadContext, eid: number) {
+export function focusEntity(ctx: MainContext, eid: number) {
   ctx.sendMessage<FocusEntityMessage>(Thread.Game, {
     type: EditorMessageType.FocusEntity,
     eid,
   });
 }
 
-export function renameEntity(ctx: IMainThreadContext, eid: number, name: string) {
+export function renameEntity(ctx: MainContext, eid: number, name: string) {
   ctx.sendMessage<RenameEntityMessage>(Thread.Game, {
     type: EditorMessageType.RenameEntity,
     eid,
@@ -199,7 +232,7 @@ export function renameEntity(ctx: IMainThreadContext, eid: number, name: string)
 }
 
 export function reparentEntities(
-  ctx: IMainThreadContext,
+  ctx: MainContext,
   entities: number[],
   target: number | undefined,
   position: ReparentEntityPosition
@@ -226,7 +259,7 @@ function buildEditorNode(sceneOrNode: MainScene | MainNode, parent?: EditorNode)
     node = {
       id: mainScene.eid,
       eid: mainScene.eid,
-      name: mainScene.name,
+      name: mainScene.name ?? "Unnamed",
       children: [],
     };
 
@@ -237,7 +270,7 @@ function buildEditorNode(sceneOrNode: MainScene | MainNode, parent?: EditorNode)
     node = {
       id: mainNode.eid,
       eid: mainNode.eid,
-      name: mainNode.name,
+      name: mainNode.name ?? "Unnamed",
       children: [],
     };
 
@@ -254,4 +287,30 @@ function buildEditorNode(sceneOrNode: MainScene | MainNode, parent?: EditorNode)
   }
 
   return node;
+}
+
+export function buildResourceList(ctx: MainContext, resourceType: ILocalResourceConstructor<MainContext>): EditorNode {
+  const resourceDef = resourceType.resourceDef;
+
+  const resourceNodes: EditorNode[] = [];
+
+  const rootNode: EditorNode = {
+    id: -1,
+    eid: -1,
+    name: kebabToPascalCase(resourceDef.name),
+    children: resourceNodes,
+  };
+
+  const resources = getLocalResources(ctx, resourceType);
+
+  for (const resource of resources) {
+    resourceNodes.push({
+      id: resource.eid,
+      eid: resource.eid,
+      name: "name" in resource && typeof resource.name === "string" ? resource.name : "Unknown Resource",
+      children: [],
+    });
+  }
+
+  return rootNode;
 }

@@ -1,3 +1,5 @@
+import { getGPUTier } from "detect-gpu";
+
 import GameWorker from "./GameWorker?worker";
 import { WorkerMessageType, InitializeGameWorkerMessage, InitializeRenderWorkerMessage } from "./WorkerMessage";
 import {
@@ -11,10 +13,15 @@ import mainThreadConfig from "./config.main";
 import { MockMessagePort } from "./module/MockMessageChannel";
 import { getLocalResources, MainWorld, ResourceLoaderSystem } from "./resource/resource.main";
 import { waitUntil } from "./utils/waitUntil";
+import {
+  gpuTierToRenderQuality,
+  LOCAL_STORAGE_RENDER_QUALITY,
+  RenderQuality,
+  RenderQualitySetting,
+} from "./renderer/renderer.common";
+import { createInputRingBuffer, InputRingBuffer } from "./common/InputRingBuffer";
 
-export type MainThreadSystem = (state: IMainThreadContext) => void;
-
-export interface IMainThreadContext extends ConsumerThreadContext {
+export interface MainContext extends ConsumerThreadContext {
   useOffscreenCanvas: boolean;
   mainToGameTripleBufferFlags: Uint8Array;
   gameToMainTripleBufferFlags: Uint8Array;
@@ -26,7 +33,11 @@ export interface IMainThreadContext extends ConsumerThreadContext {
   supportedXRSessionModes: XRSessionMode[] | false;
   dt: number;
   elapsed: number;
+  quality: RenderQuality;
+  inputRingBuffer: InputRingBuffer;
 }
+
+export type MainThreadSystem = (ctx: MainContext) => void;
 
 async function getSupportedXRSessionModes(): Promise<false | XRSessionMode[]> {
   let supportedXRSessionModes: XRSessionMode[] | false = false;
@@ -52,6 +63,41 @@ async function getSupportedXRSessionModes(): Promise<false | XRSessionMode[]> {
   return false;
 }
 
+async function getRenderQuality() {
+  const benchmarksURL = new URL("/detect-gpu-benchmarks", document.location.href).href;
+
+  const qualitySettingStr = localStorage.getItem(LOCAL_STORAGE_RENDER_QUALITY);
+  const qualitySetting = qualitySettingStr ? JSON.parse(qualitySettingStr) : undefined;
+
+  let quality: RenderQuality;
+
+  if (!qualitySetting || qualitySetting === RenderQualitySetting.Auto) {
+    const result = await getGPUTier({ benchmarksURL, mobileTiers: [0, 60, 90, 120], desktopTiers: [0, 60, 90, 120] });
+
+    console.info(`GPU Detected: "${result.gpu}" Tier: ${result.tier}`);
+
+    if (result.type !== "BENCHMARK") {
+      quality = RenderQuality.Medium;
+    } else {
+      quality = gpuTierToRenderQuality(result.tier);
+    }
+  } else {
+    if (qualitySetting === RenderQualitySetting.Low) {
+      quality = RenderQuality.Low;
+    } else if (qualitySetting === RenderQualitySetting.Medium) {
+      quality = RenderQuality.Medium;
+    } else if (qualitySetting === RenderQualitySetting.High) {
+      quality = RenderQuality.High;
+    } else if (qualitySetting === RenderQualitySetting.Ultra) {
+      quality = RenderQuality.Ultra;
+    } else {
+      quality = RenderQuality.Medium;
+    }
+  }
+
+  return quality;
+}
+
 export async function MainThread(canvas: HTMLCanvasElement) {
   const supportsOffscreenCanvas = !!window.OffscreenCanvas;
   const [, hashSearch] = window.location.hash.split("?");
@@ -59,6 +105,7 @@ export async function MainThread(canvas: HTMLCanvasElement) {
 
   const supportedXRSessionModes = await getSupportedXRSessionModes();
 
+  const quality = await getRenderQuality();
   const useOffscreenCanvas = supportsOffscreenCanvas && renderMain === null && !supportedXRSessionModes;
 
   const singleConsumerThreadSharedState: SingleConsumerThreadSharedState | undefined = useOffscreenCanvas
@@ -68,6 +115,8 @@ export async function MainThread(canvas: HTMLCanvasElement) {
         xrViewerWorldMatrix: new Float32Array(16),
         update: () => {},
       };
+
+  const inputRingBuffer = createInputRingBuffer();
 
   const gameWorker = new GameWorker();
   const renderWorker = await initRenderWorker(canvas, gameWorker, useOffscreenCanvas, singleConsumerThreadSharedState);
@@ -86,7 +135,7 @@ export async function MainThread(canvas: HTMLCanvasElement) {
   const gameToRenderTripleBufferFlags = new Uint8Array(new SharedArrayBuffer(Uint8Array.BYTES_PER_ELEMENT)).fill(0x6);
   const gameToMainTripleBufferFlags = new Uint8Array(new SharedArrayBuffer(Uint8Array.BYTES_PER_ELEMENT)).fill(0x6);
 
-  const ctx: IMainThreadContext = {
+  const ctx: MainContext = {
     thread: Thread.Main,
     mainToGameTripleBufferFlags,
     gameToMainTripleBufferFlags,
@@ -106,6 +155,8 @@ export async function MainThread(canvas: HTMLCanvasElement) {
     elapsed: 0,
     tick: 0,
     singleConsumerThreadSharedState,
+    quality,
+    inputRingBuffer,
   };
 
   function onWorkerMessage(event: MessageEvent) {
@@ -221,11 +272,11 @@ async function initRenderWorker(
 ): Promise<Worker | MockMessagePort> {
   if (useOffscreenCanvas) {
     console.info("Browser supports OffscreenCanvas, rendering in WebWorker.");
-    const { default: RenderWorker } = await import("./RenderWorker?worker");
+    const { default: RenderWorker } = await import("./renderer/RenderWorker?worker");
     return new RenderWorker();
   } else {
     console.info("Browser does not support OffscreenCanvas, rendering on main thread.");
-    const { default: initRenderWorkerOnMainThread } = await import("./RenderWorker");
+    const { default: initRenderWorkerOnMainThread } = await import("./renderer/RenderWorker");
     return initRenderWorkerOnMainThread(canvas, gameWorker, singleConsumerThreadSharedState!);
   }
 }

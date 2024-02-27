@@ -1,9 +1,24 @@
-import { Client, GroupCall, Member, PowerLevels, SubscriptionHandle } from "@thirdroom/hydrogen-view-sdk";
+import {
+  CallIntent,
+  Client,
+  GroupCall,
+  LocalMedia,
+  Member,
+  Platform,
+  Room,
+  Session,
+  SubscriptionHandle,
+} from "@thirdroom/hydrogen-view-sdk";
 
-import { enterWorld, exitWorld } from "../../plugins/thirdroom/thirdroom.main";
+import { exitWorld } from "../../plugins/thirdroom/thirdroom.main";
 import { setLocalMediaStream } from "../audio/audio.main";
-import { IMainThreadContext } from "../MainThread";
-import { addPeer, disconnect, hasPeer, removePeer, setHost, setPeerId } from "./network.main";
+import { MainContext } from "../MainThread";
+import { addPeer, disconnect, hasPeer, removePeer, setHost } from "./network.main";
+import { getRoomCall } from "../../ui/utils/matrixUtils";
+
+export interface MatrixNetworkInterface {
+  dispose: () => void;
+}
 
 function memberComparator(a: Member, b: Member): number {
   if (a.eventTimestamp === b.eventTimestamp) {
@@ -15,21 +30,61 @@ function memberComparator(a: Member, b: Member): number {
 
 function isOlderThanLocalHost(groupCall: GroupCall, member: Member): boolean {
   if (groupCall.eventTimestamp === member.eventTimestamp) {
-    return groupCall.deviceIndex! < member.deviceIndex;
+    return groupCall.deviceIndex! <= member.deviceIndex;
   }
 
   return groupCall.eventTimestamp! < member.eventTimestamp;
 }
 
+function getReliableHost(groupCall: GroupCall): Member | undefined {
+  const sortedMembers = Array.from(new Map(groupCall.members).values())
+    .sort(memberComparator)
+    .filter((member) => member.isConnected && member.dataChannel);
+
+  if (sortedMembers.length === 0) return undefined;
+  if (isOlderThanLocalHost(groupCall, sortedMembers[0])) return undefined;
+
+  return sortedMembers[0];
+}
+
+const getWorldGroupCall = (session: Session, world: Room) => getRoomCall(session.callHandler.calls, world.id);
+
 export async function createMatrixNetworkInterface(
-  ctx: IMainThreadContext,
+  ctx: MainContext,
   client: Client,
-  powerLevels: PowerLevels,
-  groupCall: GroupCall
-): Promise<() => void> {
-  if (!client.session) {
+  platform: Platform,
+  world: Room
+): Promise<MatrixNetworkInterface> {
+  const session = client.session;
+
+  if (!session) {
     throw new Error("You must initialize the client session before creating the network interface");
   }
+
+  let groupCall = getWorldGroupCall(session, world);
+
+  if (!groupCall) {
+    groupCall = await session.callHandler.createCall(world.id, "m.voice", "World Call", CallIntent.Room);
+  }
+
+  let stream;
+  try {
+    stream = await platform.mediaDevices.getMediaTracks(true, false);
+  } catch (err) {
+    console.error(err);
+  }
+  const localMedia = stream
+    ? new LocalMedia().withUserMedia(stream).withDataChannel({})
+    : new LocalMedia().withDataChannel({});
+
+  await groupCall.join(localMedia);
+
+  // Mute after connecting based on user preference
+  if (groupCall.muteSettings?.microphone === false && localStorage.getItem("microphone") !== "true") {
+    groupCall.setMuted(groupCall.muteSettings.toggleMicrophone());
+  }
+
+  setLocalMediaStream(ctx, groupCall.localMedia?.userMedia);
 
   // TODO: should peer ids be keyed like the call ids? (userId, deviceId, sessionId)?
   // Or maybe just (userId, deviceId)?
@@ -37,120 +92,82 @@ export async function createMatrixNetworkInterface(
 
   let unsubscibeMembersObservable: SubscriptionHandle | undefined;
 
-  const userId = client.session.userId;
+  const userId = session.userId;
 
-  const initialHostId = await getInitialHost(userId);
-  await joinWorld(userId, initialHostId === userId);
+  const initialHostId = await getInitialHost(groupCall, userId);
+  await joinWorld(groupCall, userId, initialHostId === userId);
 
-  function getInitialHost(userId: string): Promise<string> {
+  function getInitialHost(groupCall: GroupCall, userId: string): Promise<string> {
     // Of the all group call members find the one whose member event is oldest
     // If the member has multiple devices get the device with the lowest device index
     // Wait for that member to be connected and return their user id
     // If the member hasn't connected in 10 seconds, return the longest connected user id
 
-    let hostId: string | undefined;
-
     return new Promise((resolve) => {
       let timeout: number | undefined = undefined;
 
+      const reliableHost = getReliableHost(groupCall);
+      if (reliableHost) {
+        resolve(reliableHost.userId);
+        return;
+      }
+      if (groupCall.members.size === 0) {
+        resolve(userId);
+        return;
+      }
+
       const unsubscribe = groupCall.members.subscribe({
-        onAdd(_key, member) {
-          // The host connected, resolve with their id
-          // NOTE: Do we also need to check for older events here? Maybe there's an older member and we
-          // haven't received their event yet?
-          if (hostId && member.userId === hostId && member.isConnected && member.dataChannel) {
+        onAdd() {
+          const host = getReliableHost(groupCall);
+          if (host) {
             clearTimeout(timeout);
             unsubscribe();
-            resolve(hostId);
+            resolve(host.userId);
           }
         },
-        onRemove(_key, member) {
-          if (hostId && member.userId === hostId) {
-            // The current host disconnected, pick the next best host
-            const sortedMembers = Array.from(new Map(groupCall.members).values()).sort(memberComparator);
-
-            // If there are no other members, you're the host
-            if (sortedMembers.length === 0 || !isOlderThanLocalHost(groupCall, sortedMembers[0])) {
-              clearTimeout(timeout);
-              unsubscribe();
-              resolve(userId);
-            } else {
-              const nextHost = sortedMembers[0];
-
-              // If the next best host is connected then resolve with their id
-              if (nextHost.isConnected && member.dataChannel) {
-                clearTimeout(timeout);
-                unsubscribe();
-                resolve(nextHost.userId);
-              } else {
-                hostId = nextHost.userId;
-              }
-            }
+        onRemove() {
+          const host = getReliableHost(groupCall);
+          if (host) {
+            clearTimeout(timeout);
+            unsubscribe();
+            resolve(host.userId);
           }
         },
         onReset() {
           throw new Error("Unexpected reset of groupCall.members");
         },
-        onUpdate(_key, member) {
-          // The host connected, resolve with their id
-          if (hostId && member.userId === hostId && member.isConnected && member.dataChannel) {
+        onUpdate() {
+          const host = getReliableHost(groupCall);
+          if (host) {
             clearTimeout(timeout);
             unsubscribe();
-            resolve(hostId);
+            resolve(host.userId);
           }
         },
       });
 
+      // wait if any member to become reliable.
+      // resolve otherwise
       timeout = window.setTimeout(() => {
-        // The host hasn't connected yet after 10 seconds. Use the oldest connected host instead.
         unsubscribe();
-
-        const sortedConnectedMembers = Array.from(new Map(groupCall.members).values())
-          .sort(memberComparator)
-          .filter((member) => member.isConnected && member.dataChannel);
-
-        if (sortedConnectedMembers.length > 0 && isOlderThanLocalHost(groupCall, sortedConnectedMembers[0])) {
-          resolve(sortedConnectedMembers[0].userId);
-        } else {
-          resolve(userId);
-        }
+        const host = getReliableHost(groupCall);
+        resolve(host?.userId ?? userId);
       }, 10000);
-
-      const initialSortedMembers = Array.from(new Map(groupCall.members).values()).sort(memberComparator);
-
-      if (initialSortedMembers.length === 0 || !isOlderThanLocalHost(groupCall, initialSortedMembers[0])) {
-        clearTimeout(timeout);
-        unsubscribe();
-        resolve(userId);
-      } else {
-        const hostMember = initialSortedMembers[0];
-
-        if (hostMember.isConnected && hostMember.dataChannel) {
-          clearTimeout(timeout);
-          unsubscribe();
-          resolve(hostMember.userId);
-        } else {
-          hostId = hostMember.userId;
-        }
-      }
     });
   }
 
-  async function joinWorld(userId: string, isHost: boolean) {
+  async function joinWorld(groupCall: GroupCall, userId: string, isHost: boolean) {
     if (isHost) setHost(ctx, userId);
-    setPeerId(ctx, userId);
-    setLocalMediaStream(ctx, groupCall.localMedia?.userMedia);
-    await enterWorld(ctx);
 
     unsubscibeMembersObservable = groupCall.members.subscribe({
       onAdd(_key, member) {
         if (member.isConnected && member.dataChannel) {
-          updateHost(userId);
+          updateHost(groupCall, userId);
           addPeer(ctx, member.userId, member.dataChannel, member.remoteMedia?.userMedia);
         }
       },
       onRemove(_key, member) {
-        updateHost(userId);
+        updateHost(groupCall, userId);
         removePeer(ctx, member.userId);
       },
       onReset() {
@@ -158,7 +175,7 @@ export async function createMatrixNetworkInterface(
       },
       onUpdate(_key, member) {
         if (member.isConnected && member.dataChannel && !hasPeer(ctx, member.userId)) {
-          updateHost(userId);
+          updateHost(groupCall, userId);
           addPeer(ctx, member.userId, member.dataChannel, member.remoteMedia?.userMedia);
         }
       },
@@ -171,39 +188,45 @@ export async function createMatrixNetworkInterface(
     }
   }
 
-  function updateHost(userId: string) {
+  function updateHost(groupCall: GroupCall, userId: string) {
     // Of the connected members find the one whose member event is oldest
     // If the member has multiple devices get the device with the lowest device index
 
-    const sortedConnectedMembers = Array.from(new Map(groupCall.members).values())
-      .sort(memberComparator)
-      .filter((member) => member.isConnected && member.dataChannel);
+    const reliableHost = getReliableHost(groupCall);
 
-    if (sortedConnectedMembers.length === 0 || isOlderThanLocalHost(groupCall, sortedConnectedMembers[0])) {
-      setHost(ctx, userId);
-    } else {
+    if (reliableHost) {
       // TODO: use powerlevels to determine host
-      // find youngest member for now
-      const hostMember = sortedConnectedMembers.sort((a, b) => {
-        if (a.eventTimestamp === b.eventTimestamp) {
-          return a.deviceIndex! > b.deviceIndex ? 1 : -1;
-        }
-        return a.eventTimestamp! > b.eventTimestamp ? 1 : -1;
-      })[0];
-      setHost(ctx, hostMember.userId);
+      setHost(ctx, reliableHost.userId);
+    } else {
+      setHost(ctx, userId);
     }
   }
 
-  return () => {
-    disconnect(ctx);
+  return {
+    dispose: () => {
+      disconnect(ctx);
 
-    exitWorld(ctx);
-    setLocalMediaStream(ctx, undefined);
+      exitWorld(ctx);
 
-    if (unsubscibeMembersObservable) {
-      unsubscibeMembersObservable();
-    }
+      setLocalMediaStream(ctx, undefined);
 
-    groupCall.leave();
+      if (unsubscibeMembersObservable) {
+        unsubscibeMembersObservable();
+      }
+
+      if (groupCall) {
+        groupCall.leave();
+      }
+    },
   };
 }
+
+let baseMxNetworkInterface: MatrixNetworkInterface | undefined;
+export const registerMatrixNetworkInterface = (matrixNetworkInterface: MatrixNetworkInterface) => {
+  baseMxNetworkInterface = matrixNetworkInterface;
+};
+export const provideMatrixNetworkInterface = (
+  update: (mxNetworkInterface: MatrixNetworkInterface | undefined) => void
+) => {
+  update(baseMxNetworkInterface);
+};

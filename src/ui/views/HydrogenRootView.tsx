@@ -16,6 +16,8 @@ import {
   OIDCLoginMethod,
   ILoginMethod,
   ISessionInfo,
+  FeatureSet,
+  FeatureFlag,
 } from "@thirdroom/hydrogen-view-sdk";
 import downloadSandboxPath from "@thirdroom/hydrogen-view-sdk/download-sandbox.html?url";
 import workerPath from "@thirdroom/hydrogen-view-sdk/main.js?url";
@@ -132,19 +134,10 @@ function initHydrogen() {
   };
 
   const oidcClientId = document.location.hostname === "thirdroom.io" ? "thirdroom" : "thirdroom_dev";
-  const oidcUris = ((): string[] => {
-    if (document.location.hostname === "thirdroom.io") {
-      return ["https://thirdroom.io"];
-    }
-
-    const { protocol, hostname, port } = document.location;
-    return [`${protocol}//${hostname}${port ? `:${port}` : ""}`];
-  })();
 
   const config = { ...configData };
-  config.oidc.clientConfigs["https://id.thirdroom.io/realms/thirdroom/"] = {
+  config.staticOidcClients["https://id.thirdroom.io/realms/thirdroom/"] = {
     client_id: oidcClientId,
-    uris: oidcUris,
     guestKeycloakIdpHint: "guest",
   };
 
@@ -153,11 +146,12 @@ function initHydrogen() {
   };
 
   const platform = new Platform({ container, assetPaths, config, options });
+  const features = new FeatureSet(FeatureFlag.Calls);
 
   const navigation = new Navigation(allowsChild);
   platform.setNavigation(navigation);
 
-  const client = new Client(platform, { deviceName: "Third Room" });
+  const client = new Client(platform, features, { deviceName: "Third Room" });
 
   hydrogenInstance = {
     client,
@@ -209,7 +203,7 @@ function getSessionInfo(): ISessionInfo | undefined {
   return undefined;
 }
 
-async function loadSession(client: Client, session: Session) {
+async function waitToLoadClient(client: Client) {
   await client.loadStatus.waitFor((loadStatus: LoadStatus) => {
     const isCatchupSync = loadStatus === LoadStatus.FirstSync && client.sync.status.get() === SyncStatus.CatchupSync;
 
@@ -224,17 +218,30 @@ async function loadSession(client: Client, session: Session) {
   const loadStatus = client.loadStatus.get();
 
   if (loadStatus === LoadStatus.Error || loadStatus === LoadStatus.LoginFailed) {
-    return false;
+    throw new Error(loginFailureToMsg(client.loginFailure));
   }
-
-  await session.callHandler.loadCalls("m.room" as CallIntent);
-  return true;
 }
 
 function loginFailureToMsg(loginFailure: LoginFailure) {
   if (loginFailure === LoginFailure.Connection) return "Connection timeout. Please try again.";
   if (loginFailure === LoginFailure.Credentials) return "Invalid credentials. Please try again.";
   if (loginFailure === LoginFailure.Unknown) return "Unknown error. Please try again.";
+}
+
+async function loadClient(client: Client, sessionId: string): Promise<Session | undefined> {
+  try {
+    await waitToLoadClient(client);
+    if (client.session) {
+      await client.session.callHandler.loadCalls("m.room" as CallIntent);
+      return client.session;
+    }
+    await client.startLogout(sessionId);
+    localStorage.clear();
+  } catch (error) {
+    localStorage.clear();
+    throw error;
+  }
+  return undefined;
 }
 
 async function getOidcLoginMethod(platform: Platform, urlCreator: URLRouter, state: string, code: string) {
@@ -261,7 +268,7 @@ async function getOidcLoginMethod(platform: Platform, urlCreator: URLRouter, sta
   return new OIDCLoginMethod({
     oidcApi: new OidcApi({
       issuer,
-      clientConfigs: platform.config.oidc.clientConfigs,
+      staticClients: platform.config.staticOidcClients,
       clientId,
       urlCreator,
       request: platform.request,
@@ -315,17 +322,7 @@ function useSession(client: Client, platform: Platform, urlRouter: URLRouter) {
   } = useAsyncCallback(
     async (sessionInfo: ISessionInfo) => {
       await client.startWithExistingSession(sessionInfo.id);
-
-      try {
-        if (client.session && (await loadSession(client, client.session))) {
-          sessionRef.current = client.session;
-          return;
-        }
-        await client.startLogout(sessionInfo.id);
-      } catch (error) {
-        console.error("Error loading initial session", error);
-      }
-      localStorage.clear();
+      sessionRef.current = await loadClient(client, sessionInfo.id);
     },
     [platform, client]
   );
@@ -337,17 +334,7 @@ function useSession(client: Client, platform: Platform, urlRouter: URLRouter) {
   } = useAsyncCallback<(loginMethod: ILoginMethod) => Promise<void>, void>(
     async (loginMethod) => {
       await client.startWithLogin(loginMethod);
-
-      try {
-        if (client.session && (await loadSession(client, client.session))) {
-          sessionRef.current = client.session;
-          return;
-        }
-        await client.startLogout(client.sessionId);
-      } catch (error) {
-        console.error("Unknown error logging in.", error);
-      }
-      localStorage.clear();
+      sessionRef.current = await loadClient(client, client.sessionId);
     },
     [client]
   );
@@ -377,9 +364,7 @@ function useSession(client: Client, platform: Platform, urlRouter: URLRouter) {
 
   const loading = loadingInitialSession || loggingIn || loggingOut || (session && !profileRoom);
   const error = initialSessionLoadError || errorLoggingIn || errorLoggingOut;
-  let errorMsg = error?.message;
-  if (errorLoggingIn) errorMsg = loginFailureToMsg(client.loginFailure) ?? errorMsg;
-  if (oidcCompleteError) errorMsg = oidcCompleteError;
+  const errorMsg = oidcCompleteError ?? error?.message;
 
   return {
     session,
@@ -426,7 +411,7 @@ export function HydrogenRootView() {
     [client, platform, navigation, containerEl, urlRouter, logger, session, profileRoom, login, logout]
   );
 
-  const previewPath = useMatch({ path: "/preview" });
+  const landingPath = useMatch({ path: "/landing" });
   const loginPath = useMatch({ path: "/login" });
 
   const href = window.location.href;
@@ -436,7 +421,7 @@ export function HydrogenRootView() {
     localStorage.setItem("on_login_redirect_uri", href);
   }
 
-  if (sessionInfo && !loading && !session && !previewPath) {
+  if (sessionInfo && !loading && !session && !landingPath) {
     loadInitialSession(sessionInfo);
   }
 
@@ -459,12 +444,12 @@ export function HydrogenRootView() {
     return <Navigate to="/login" replace={true} />;
   }
 
-  if (!previewPath && !loginPath && !session && !sessionInfo) {
-    return <Navigate to="/preview" replace={true} />;
+  if (!landingPath && !loginPath && !session && !sessionInfo) {
+    return <Navigate to="/landing" replace={true} />;
   }
 
   const onLoginRedirectPath = localStorage.getItem("on_login_redirect_uri")?.match(WORLD_PATH_REG)?.[1];
-  if (sessionInfo && !previewPath && onLoginRedirectPath) {
+  if (sessionInfo && !landingPath && onLoginRedirectPath) {
     localStorage.removeItem("on_login_redirect_uri");
     return <Navigate to={onLoginRedirectPath} />;
   }
