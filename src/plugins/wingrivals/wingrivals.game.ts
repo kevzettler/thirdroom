@@ -1,10 +1,10 @@
 import { quat, vec3 } from "gl-matrix";
 import { addComponent, defineComponent } from "bitecs";
-
-import { enableActionMap} from "../../engine/input/ActionMappingSystem";
+import { addChild } from "../../engine/component/transform";
+import { enableActionMap } from "../../engine/input/ActionMappingSystem";
 import { defineModule, getModule } from "../../engine/module/module.common";
 import { GameContext } from "../../engine/GameTypes";
-import { loadGLTF, loadDefaultGLTFScene } from "../../engine/gltf/gltf.game";
+import { loadGLTF, loadDefaultGLTFScene, createNodeFromGLTFURI } from "../../engine/gltf/gltf.game";
 import { RemoteNode, RemoteScene, RemoteEnvironment, addObjectToWorld, RemoteImage, RemoteReflectionProbe, RemoteTexture, RemoteSampler } from "../../engine/resource/RemoteResources";
 import { SamplerMapping } from "../../engine/resource/schema";
 import { InputModule } from "../../engine/input/input.game";
@@ -33,10 +33,11 @@ export const WingRivalsModule = defineModule<GameContext, {}>({
       resourceManager,
     });
 
-  const environmentScene = loadDefaultGLTFScene(ctx, sceneGLTFResource, {
-    createDefaultMeshColliders: true,
-    rootIsStatic: true,
-  }) as RemoteScene;
+
+    const environmentScene = loadDefaultGLTFScene(ctx, sceneGLTFResource, {
+      createDefaultMeshColliders: true,
+      rootIsStatic: true,
+    }) as RemoteScene;
 
     if (!environmentScene.reflectionProbe || !environmentScene.backgroundTexture) {
       const defaultEnvironmentMapTexture = new RemoteTexture(ctx.resourceManager, {
@@ -72,14 +73,20 @@ export const WingRivalsModule = defineModule<GameContext, {}>({
   });
 
 
-  const container = new RemoteNode(ctx.resourceManager);
+    const container = new RemoteNode(ctx.resourceManager);
+
+    loadGLTF(ctx, "/gltf/fighter01.glb", {
+      resourceManager
+    });
+    const ship = createNodeFromGLTFURI(ctx, "/gltf/fighter01.glb");
+    addChild(container, ship);
 
     addComponent(ctx.world, FlyControls, container.eid);
     FlyControls.set(container.eid, {
       speed: 1000,
     });
 
-    const [camera] = addCameraRig(ctx, container, CameraRigType.PointerLock);
+    const [camera] = addCameraRig(ctx, container, CameraRigType.PointerLock, [0, 5, 5]);
 
 
     addComponent(ctx.world, Player, container.eid);
