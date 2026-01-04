@@ -17,11 +17,17 @@ export function WorldThumbnail() {
 
   const previewId = selectedWorldId ?? worldId;
 
-  const { session } = useHydrogen(true);
+  const { session } = useHydrogen(false);
   const [worldPreview, setWorldPreview] = useState<{ url?: string; thumbnail: string } | undefined>();
   const isMounted = useIsMounted();
 
   useEffect(() => {
+    // Skip Matrix-based preview loading if no session
+    if (!session) {
+      setWorldPreview(undefined);
+      return;
+    }
+
     let selectedWorldChanged = false;
     const world = previewId ? session.rooms.get(previewId) : undefined;
     if (world) {

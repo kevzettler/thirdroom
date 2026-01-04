@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Room } from "@thirdroom/hydrogen-view-sdk";
 import classNames from "classnames";
 import { useAtom, useAtomValue } from "jotai";
 import { useKBar, VisualState } from "kbar";
@@ -18,8 +17,6 @@ import { useToast } from "../../../hooks/useToast";
 import { useHydrogen } from "../../../hooks/useHydrogen";
 import { MainContext } from "../../../../engine/MainThread";
 import { createDisposables } from "../../../../engine/utils/createDisposables";
-import { useCalls } from "../../../hooks/useCalls";
-import { useRoomCall } from "../../../hooks/useRoomCall";
 import { useWebXRSession } from "../../../hooks/useWebXRSession";
 import { worldChatVisibilityAtom } from "../../../state/worldChatVisibility";
 import { overlayVisibilityAtom } from "../../../state/overlayVisibility";
@@ -45,18 +42,18 @@ import { editorEnabledAtom } from "../../../state/editor";
 import { usePowerLevels } from "../../../hooks/usePowerLevels";
 import { ObjectCapReachedMessage, ThirdRoomMessageType } from "../../../../plugins/thirdroom/thirdroom.common";
 
+import { World } from "../../../../client/world-client";
+import { useAuth } from "../../../../hooks/useAuth";
+
 const SHOW_NAMES_STORE = "showNames";
 interface WorldViewProps {
-  world: Room;
+  world: World;
 }
 
 export function WorldView({ world }: WorldViewProps) {
   const mainThread = useMainThreadContext();
-  const { session } = useHydrogen(true);
-  const { getPowerLevel, canSendStateEvent } = usePowerLevels(world);
-  const canEditScene = canSendStateEvent("org.matrix.msc3815.world", getPowerLevel(session.userId));
-  const calls = useCalls(session);
-  const activeCall = useRoomCall(calls, world.id);
+  const { user } = useAuth();
+  const canEditScene = user?.id === world.ownerId;
   const isWorldEntered = useAtomValue(worldAtom).entered;
   const [worldChatVisible, setWorldChatVisibility] = useAtom(worldChatVisibilityAtom);
   const [overlayVisible, setOverlayVisibility] = useAtom(overlayVisibilityAtom);
@@ -156,7 +153,7 @@ export function WorldView({ world }: WorldViewProps) {
 
   return (
     <div className="WorldView">
-      <MuteButtonAction activeCall={activeCall} showToast={showToast} />
+      {/* Mute button removed - will be re-implemented with WebRTC */}
       <MembersDialogAction world={world} />
       <ShortcutDialogAction />
       {isWebXRSupported && <EnterWebXRAction enter={enterXR} />}
@@ -173,7 +170,6 @@ export function WorldView({ world }: WorldViewProps) {
             className="WorldView__controls"
             session={session}
             world={world}
-            activeCall={activeCall}
             showToast={showToast}
             isWebXRSupported={isWebXRSupported}
             enterXR={enterXR}
@@ -186,7 +182,7 @@ export function WorldView({ world }: WorldViewProps) {
       {!("isBeingCreated" in world) && <Nametags room={world} show={showNames && !overlayVisible} />}
 
       {!overlayVisible && !editorEnabled && (
-        <WorldInteraction session={session} world={world} activeCall={activeCall} />
+        <WorldInteraction world={world} />
       )}
 
       <div className="WorldView__toast-container">

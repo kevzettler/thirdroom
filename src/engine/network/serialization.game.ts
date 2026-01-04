@@ -458,14 +458,18 @@ export const serializeInformPlayerNetworkId = (ctx: GameContext, v: CursorView, 
   writeUint32(v, peerNid);
 };
 
-export async function deserializeInformPlayerNetworkId(ctx: GameContext, v: CursorView) {
+export async function deserializeInformPlayerNetworkId(ctx: GameContext, v: CursorView, senderPeerId: string) {
   const network = getModule(ctx, NetworkModule);
 
-  // read
-  const peerId = readString(v);
+  // read the peer ID from message (this is the signaling peer ID of the sender)
+  const messagePeerId = readString(v);
   const peerNid = readUint32(v);
 
-  console.info("deserializeInformPlayerNetworkId for peer", peerId, peerNid);
+  // Use the sender's peer ID from the message handler (signaling peer ID)
+  // This ensures we use the same ID that was registered in addPeerId
+  const peerId = senderPeerId;
+
+  console.info("deserializeInformPlayerNetworkId for peer", peerId, "messagePeerId:", messagePeerId, "nid:", peerNid);
 
   // BUG: entity creation message is parsed after this message for some reason
   // HACK: await the entity's creation

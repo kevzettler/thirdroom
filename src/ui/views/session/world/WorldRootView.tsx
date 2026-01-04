@@ -1,48 +1,57 @@
-import { Room, StateEvent, SubscriptionHandle } from "@thirdroom/hydrogen-view-sdk";
 import { useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 
-import { useHydrogen } from "../../../hooks/useHydrogen";
 import { useIsMounted } from "../../../hooks/useIsMounted";
-import { useRoom } from "../../../hooks/useRoom";
 import { useWorldPath } from "../../../hooks/useWorld";
 import { useWorldLoader } from "../../../hooks/useWorldLoader";
 import { overlayVisibilityAtom } from "../../../state/overlayVisibility";
 import { overlayWorldAtom } from "../../../state/overlayWorld";
 import { worldAtom } from "../../../state/world";
-import { WorldLoading } from "./WorldLoading";
+import { SimpleWorldLoading } from "./SimpleWorldLoading";
 import { WorldThumbnail } from "./WorldThumbnail";
-import { WorldView } from "./WorldView";
+import { SimpleWorldView } from "./SimpleWorldView";
 import { editorEnabledAtom } from "../../../state/editor";
-
-async function getWorldContent(world: Room) {
-  const stateEvent = await world.getStateEvent("org.matrix.msc3815.world");
-  return stateEvent?.event.content;
-}
+import { worldClient, World } from "../../../../client/world-client";
 
 export default function WorldRootView() {
-  const { entered, loading } = useAtomValue(worldAtom);
+  const { entered, loading, worldId: currentWorldId } = useAtomValue(worldAtom);
   const setWorld = useSetAtom(worldAtom);
-  const { session } = useHydrogen(true);
   const isMounted = useIsMounted();
   const [error, setError] = useState<Error>();
+  const [navigatedWorld, setNavigatedWorld] = useState<World | null>(null);
   const setOverlayVisibility = useSetAtom(overlayVisibilityAtom);
   const { loadAndEnterWorld, reloadWorld, exitWorld } = useWorldLoader();
   const selectWorld = useSetAtom(overlayWorldAtom);
-  const [roomId, reloadId] = useWorldPath();
-  const navigatedWorld = useRoom(session, roomId);
+  const [worldId, reloadId] = useWorldPath();
   const setEditorEnabled = useSetAtom(editorEnabledAtom);
 
+  // Load world from API
+  useEffect(() => {
+    if (worldId) {
+      worldClient
+        .getWorldById(worldId)
+        .then((world) => {
+          setNavigatedWorld(world);
+        })
+        .catch((err) => {
+          setError(err as Error);
+          console.error("Failed to load world:", err);
+        });
+    } else {
+      setNavigatedWorld(null);
+    }
+  }, [worldId]);
+
   /**
-   * Handle loading are reloading
+   * Handle loading and reloading
    */
   useEffect(() => {
     exitWorld();
     if (navigatedWorld) {
       (async () => {
         try {
-          const content = await getWorldContent(navigatedWorld);
-          await loadAndEnterWorld(navigatedWorld, content ?? {});
+          await loadAndEnterWorld(navigatedWorld);
         } catch (err) {
           setError(err as Error);
           console.error(err);
@@ -68,41 +77,41 @@ export default function WorldRootView() {
   }, [setOverlayVisibility, entered, loading]);
 
   /**
-   * Reloading via scene state update
+   * Reloading - for now, just reload when world changes
+   * TODO: Implement world update polling or WebSocket updates
    */
   useEffect(() => {
     setError(undefined);
-
-    let dispose: SubscriptionHandle;
     if (navigatedWorld && entered) {
-      const handleLoad = async (event: StateEvent | undefined) => {
-        const content = event?.content;
-        if (!content) return;
-
-        setEditorEnabled(false);
-
+      // Poll for world updates (simple implementation)
+      // In production, you might want WebSocket updates
+      const interval = setInterval(async () => {
         try {
-          await reloadWorld(navigatedWorld, content);
+          const updatedWorld = await worldClient.getWorldById(navigatedWorld.id);
+          if (
+            updatedWorld.sceneUrl !== navigatedWorld.sceneUrl ||
+            updatedWorld.scriptUrl !== navigatedWorld.scriptUrl
+          ) {
+            setEditorEnabled(false);
+            await reloadWorld(updatedWorld);
+            setNavigatedWorld(updatedWorld);
+          }
         } catch (err) {
-          setError(err as Error);
-          console.error(err);
+          console.error("Failed to check for world updates:", err);
         }
-      };
-      navigatedWorld.observeStateTypeAndKey("org.matrix.msc3815.world", "").then(async (observable) => {
-        dispose = observable.subscribe(handleLoad);
-      });
-    }
+      }, 5000); // Poll every 5 seconds
 
-    return () => {
-      dispose?.();
-    };
+      return () => {
+        clearInterval(interval);
+      };
+    }
   }, [navigatedWorld, entered, isMounted, reloadWorld, setEditorEnabled]);
 
   return (
     <>
-      {navigatedWorld && entered && <WorldView world={navigatedWorld} />}
+      {navigatedWorld && entered && <SimpleWorldView world={navigatedWorld} />}
       <WorldThumbnail />
-      {navigatedWorld && <WorldLoading world={navigatedWorld} loading={loading} error={error} />}
+      {navigatedWorld && <SimpleWorldLoading world={navigatedWorld} loading={loading} error={error} />}
     </>
   );
 }

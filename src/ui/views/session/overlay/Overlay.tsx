@@ -80,7 +80,7 @@ export function Overlay() {
               header={<RoomListHeader />}
               content={
                 <RoomListContent>
-                  {sidebarTab === SidebarTab.Home && <RoomListHome groupCalls={groupCalls} />}
+                  {sidebarTab === SidebarTab.Home && <RoomListHome />}
                   {sidebarTab === SidebarTab.Friends && <RoomListFriends />}
                   {sidebarTab === SidebarTab.Notifications && <RoomListNotifications />}
                 </RoomListContent>

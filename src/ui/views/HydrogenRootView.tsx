@@ -135,7 +135,11 @@ function initHydrogen() {
 
   const oidcClientId = document.location.hostname === "thirdroom.io" ? "thirdroom" : "thirdroom_dev";
 
-  const config = { ...configData };
+  const config = { 
+    ...configData,
+    // Initialize staticOidcClients if it doesn't exist (for backward compatibility with Matrix code)
+    staticOidcClients: configData.staticOidcClients || {}
+  };
   config.staticOidcClients["https://id.thirdroom.io/realms/thirdroom/"] = {
     client_id: oidcClientId,
     guestKeycloakIdpHint: "guest",
@@ -201,6 +205,10 @@ function getSessionInfo(): ISessionInfo | undefined {
     }
   }
   return undefined;
+}
+
+function hasBackendAuth(): boolean {
+  return localStorage.getItem("auth_token") !== null;
 }
 
 async function waitToLoadClient(client: Client) {
@@ -379,6 +387,7 @@ function useSession(client: Client, platform: Platform, urlRouter: URLRouter) {
 
 export function HydrogenRootView() {
   const sessionInfo = getSessionInfo();
+  const backendAuth = hasBackendAuth();
 
   const [{ client, containerEl, platform, navigation, urlRouter, logger }] = useState(initHydrogen);
 
@@ -440,11 +449,14 @@ export function HydrogenRootView() {
     );
   }
 
-  if (!session && !sessionInfo && href.match(WORLD_PATH_REG)) {
+  if (!session && !sessionInfo && !backendAuth && href.match(WORLD_PATH_REG)) {
     return <Navigate to="/login" replace={true} />;
   }
 
-  if (!landingPath && !loginPath && !session && !sessionInfo) {
+  // Simplified: redirect to login if not authenticated
+  // Check for either Matrix session OR backend auth token
+  // Core functionality (world loading, networking) now works without Matrix
+  if (!landingPath && !loginPath && !session && !sessionInfo && !backendAuth) {
     return <Navigate to="/landing" replace={true} />;
   }
 
@@ -454,7 +466,7 @@ export function HydrogenRootView() {
     return <Navigate to={onLoginRedirectPath} />;
   }
 
-  if (loginPath && sessionInfo) {
+  if (loginPath && (sessionInfo || backendAuth)) {
     return <Navigate to="/" replace={true} />;
   }
 

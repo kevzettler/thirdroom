@@ -72,23 +72,28 @@ async function updateHomeWorld(session: Session, accountData: HomeWorldAccountDa
 }
 
 export function useHomeWorld() {
-  const { session } = useHydrogen(true);
+  const { session } = useHydrogen(false);
   const [homeWorldId, setHomeWorldId] = useState<string>();
 
   useEffect(() => {
+    // Skip Matrix home world creation if no Matrix session
+    if (!session) {
+      return;
+    }
+
     async function run() {
-      const homeAccountData = await session.getAccountData("org.matrix.msc3815.world.home");
+      const homeAccountData = await session!.getAccountData("org.matrix.msc3815.world.home");
 
       if (
         homeAccountData &&
         homeAccountData.version &&
         homeAccountData.version >= 4 &&
-        session.rooms.get(homeAccountData.room_id)
+        session!.rooms.get(homeAccountData.room_id)
       ) {
         if (homeAccountData.version < defaultWorlds.home.version) {
-          await updateHomeWorld(session, homeAccountData);
+          await updateHomeWorld(session!, homeAccountData);
 
-          await session.setAccountData("org.matrix.msc3815.world.home", {
+          await session!.setAccountData("org.matrix.msc3815.world.home", {
             version: defaultWorlds.home.version,
             room_id: homeAccountData.room_id,
           });
@@ -97,14 +102,14 @@ export function useHomeWorld() {
         setHomeWorldId(homeAccountData.room_id);
       } else {
         if (homeAccountData && homeAccountData.version && homeAccountData.version <= 3) {
-          await session.rooms.get(homeAccountData.room_id)?.leave();
+          await session!.rooms.get(homeAccountData.room_id)?.leave();
         }
 
-        const roomBeingCreated = await createHomeWorld(session);
-        const homeWorld = await waitToCreateRoom(session, roomBeingCreated);
+        const roomBeingCreated = await createHomeWorld(session!);
+        const homeWorld = await waitToCreateRoom(session!, roomBeingCreated);
         setHomeWorldId(homeWorld!.id);
 
-        await session.setAccountData("org.matrix.msc3815.world.home", {
+        await session!.setAccountData("org.matrix.msc3815.world.home", {
           version: defaultWorlds.home.version,
           room_id: homeWorld!.id,
         });

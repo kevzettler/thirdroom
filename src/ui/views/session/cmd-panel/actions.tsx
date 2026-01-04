@@ -52,23 +52,25 @@ export const useUserProfileAction = () => {
 };
 
 export const useAccountManagementAction = () => {
-  const { session } = useHydrogen(true);
-  const { accountManagementUrl } = session.sessionInfo;
+  const { session } = useHydrogen(false);
+  const accountManagementUrl = session?.sessionInfo?.accountManagementUrl;
 
   useRegisterActions(
-    [
-      {
-        id: "manage-account",
-        name: "Manage Account",
-        shortcut: undefined,
-        keywords: "account",
-        section: ActionSection.Global,
-        icon: undefined,
-        subtitle: undefined,
-        perform: () => window.open(accountManagementUrl),
-        parent: undefined,
-      },
-    ],
+    accountManagementUrl
+      ? [
+          {
+            id: "manage-account",
+            name: "Manage Account",
+            shortcut: undefined,
+            keywords: "account",
+            section: ActionSection.Global,
+            icon: undefined,
+            subtitle: undefined,
+            perform: () => window.open(accountManagementUrl),
+            parent: undefined,
+          },
+        ]
+      : [],
     [accountManagementUrl]
   );
 };

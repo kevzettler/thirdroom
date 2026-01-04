@@ -8,7 +8,9 @@ import { KBarProvider } from "kbar";
 import "./SessionView.css";
 import { useInitMainThreadContext, MainThreadContextProvider } from "../../hooks/useMainThread";
 import { Overlay } from "./overlay/Overlay";
+import { SimpleOverlay } from "./overlay/SimpleOverlay";
 import { StatusBar } from "./statusbar/StatusBar";
+import { SimpleStatusBar } from "./statusbar/SimpleStatusBar";
 import { LoadingScreen } from "../components/loading-screen/LoadingScreen";
 import { useHomeWorld } from "../../hooks/useHomeWorld";
 import { useUnknownWorldPath } from "../../hooks/useWorld";
@@ -33,11 +35,13 @@ function RegisterKBarActions() {
 export default function SessionView() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mainThread = useInitMainThreadContext(canvasRef);
-  const { session } = useHydrogen(true);
+  // Use optional session - backend auth may not have Matrix session
+  const { session } = useHydrogen(false);
   const overlayVisible = useAtomValue(overlayVisibilityAtom);
   const [worldId, worldAlias] = useUnknownWorldPath();
   const homeWorldId = useHomeWorld();
   const selectWorld = useSetAtom(overlayWorldAtom);
+  // Only auto-join Matrix room if we have a Matrix session
   useAutoJoinRoom(session, config.repositoryRoomIdOrAlias);
 
   const editorEnabled = useAtomValue(editorEnabledAtom);
@@ -63,10 +67,10 @@ export default function SessionView() {
           {mainThread ? (
             <MainThreadContextProvider value={mainThread}>
               <Outlet />
-              {overlayVisible && <Overlay />}
-              {!editorEnabled && <StatusBar />}
+              {overlayVisible && (session ? <Overlay /> : <SimpleOverlay />)}
+              {!editorEnabled && (session ? <StatusBar /> : <SimpleStatusBar />)}
               <FirefoxPerfAlert />
-              <WhatsNew />
+              {session && <WhatsNew />}
             </MainThreadContextProvider>
           ) : (
             <LoadingScreen message="Initializing engine..." />

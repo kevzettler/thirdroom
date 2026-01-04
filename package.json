@@ -1,6 +1,7 @@
 {
   "name": "thirdroom",
   "version": "0.0.1",
+  "private": true,
   "author": {
     "name": "Third Room",
     "url": "https://thirdroom.io"
@@ -8,7 +9,9 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently \"npm run dev:server\" \"vite\"",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "vite",
     "build": "tsc && vite build && npm run docs:build && npm run build-storybook",
     "build:scripting-runtime": "./src/engine/scripting/emscripten/build.sh",
     "build:examples": "./examples/build.sh",
@@ -50,6 +53,7 @@
     "@sentry/react": "^7.13.0",
     "@sentry/tracing": "^7.13.0",
     "@thi.ng/malloc": "^6.1.19",
+    "@geckos.io/client": "^2.3.0",
     "@thirdroom/hydrogen-view-sdk": "0.1.2",
     "@thirdroom/manifold-editor-components": "^0.0.5",
     "@thirdroom/ringbuffer": "^0.0.1",
@@ -144,6 +148,7 @@
     "vite-plugin-cross-origin-isolation": "^0.1.6",
     "vite-plugin-static-copy": "^0.13.0",
     "vitepress": "^1.0.0-beta.1",
-    "vitest": "^0.29.2"
+    "vitest": "^0.29.2",
+    "concurrently": "^8.2.2"
   }
 }

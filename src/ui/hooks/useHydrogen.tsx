@@ -41,8 +41,15 @@ export function useHydrogen(ensureAuth = false): HydrogenContext | Authenticated
     throw new Error("HydrogenContext not initialized");
   }
 
+  // When using backend auth (no Matrix session), don't throw - just return context with undefined session
+  // Components should handle the case where session is undefined
   if (ensureAuth && !context.session) {
-    throw new Error("Must be authenticated to access authenticated hydrogen context");
+    // Check if we're using backend auth instead
+    const hasBackendAuth = localStorage.getItem("auth_token") !== null;
+    if (!hasBackendAuth) {
+      throw new Error("Must be authenticated to access authenticated hydrogen context");
+    }
+    // Return context anyway - session will be undefined but components should handle this
   }
 
   return context;
