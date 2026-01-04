@@ -1,5 +1,6 @@
 import geckos from "@geckos.io/client";
 import { Channel } from "@geckos.io/client";
+
 import { exitWorld } from "../../plugins/thirdroom/thirdroom.main";
 import { setLocalMediaStream } from "../audio/audio.main";
 import { MainContext } from "../MainThread";
@@ -26,7 +27,7 @@ export async function createWebRTCNetworkInterface(
   ctx: MainContext,
   userId: string,
   worldId: string,
-  signalingUrl: string = "http://localhost:3001"
+  signalingUrl = "http://localhost:3001"
 ): Promise<WebRTCNetworkInterface> {
   const signalingClient = new SignalingClient(`${signalingUrl}/signaling`);
   const peers = new Map<string, WorldPeer>();
@@ -120,7 +121,7 @@ export async function createWebRTCNetworkInterface(
   const peerConnections = new Map<string, RTCPeerConnection>();
 
   // Create RTCPeerConnection for P2P connections
-  async function connectToPeer(remotePeerId: string, remoteUserId?: string, isOfferer: boolean = true) {
+  async function connectToPeer(remotePeerId: string, remoteUserId?: string, isOfferer = true) {
     // Don't reconnect if we already have this peer
     if (peerConnections.has(remotePeerId)) {
       return;

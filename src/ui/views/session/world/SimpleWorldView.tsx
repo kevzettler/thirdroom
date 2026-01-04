@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import classNames from "classnames";
 import { useAtom, useAtomValue } from "jotai";
+import { useNavigate } from "react-router-dom";
 
 import { Text } from "../../../atoms/text/Text";
 import { useKeyDown } from "../../../hooks/useKeyDown";
 import { useEvent } from "../../../hooks/useEvent";
 import "./WorldView.css";
-import { Nametags } from "../nametags/Nametags";
 import { useMainThreadContext } from "../../../hooks/useMainThread";
-import { getModule, registerMessageHandler } from "../../../../engine/module/module.common";
+import { getModule, registerMessageHandler, Thread } from "../../../../engine/module/module.common";
 import { useToast } from "../../../hooks/useToast";
 import { MainContext } from "../../../../engine/MainThread";
 import { createDisposables } from "../../../../engine/utils/createDisposables";
@@ -24,7 +24,6 @@ import { useDisableInput } from "../../../hooks/useDisableInput";
 import { editorEnabledAtom } from "../../../state/editor";
 import { ObjectCapReachedMessage, ThirdRoomMessageType } from "../../../../plugins/thirdroom/thirdroom.common";
 import { World } from "../../../../client/world-client";
-import { useAuth } from "../../../hooks/useAuth";
 import { IconButton } from "../../../atoms/button/IconButton";
 import { Tooltip } from "../../../atoms/tooltip/Tooltip";
 import HelpIC from "../../../../../res/ic/help.svg";
@@ -37,10 +36,8 @@ import { HeaderTitle } from "../../../atoms/header/HeaderTitle";
 import { Dialog } from "../../../atoms/dialog/Dialog";
 import { Scroll } from "../../../atoms/scroll/Scroll";
 import { ShortcutUI } from "./ShortcutUI";
-import { Thread } from "../../../../engine/module/module.common";
 import { NametagsEnableMessage, NametagsEnableMessageType } from "../../../../engine/player/nametags.common";
 import { useLocalStorage } from "../../../hooks/useLocalStorage";
-import { useNavigate } from "react-router-dom";
 
 const SHOW_NAMES_STORE = "showNames";
 
@@ -144,7 +141,6 @@ function SimpleWorldControls({
 
 export function SimpleWorldView({ world }: SimpleWorldViewProps) {
   const mainThread = useMainThreadContext();
-  const { user } = useAuth();
   const isWorldEntered = useAtomValue(worldAtom).entered;
   const [worldChatVisible, setWorldChatVisibility] = useAtom(worldChatVisibilityAtom);
   const [overlayVisible, setOverlayVisibility] = useAtom(overlayVisibilityAtom);

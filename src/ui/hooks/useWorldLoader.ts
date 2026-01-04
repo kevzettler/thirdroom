@@ -1,7 +1,7 @@
 import { useSetAtom } from "jotai";
 import { useCallback } from "react";
-import config from "../../../config.json";
 
+import config from "../../../config.json";
 import { AudioModule } from "../../engine/audio/audio.main";
 import { getModule } from "../../engine/module/module.common";
 import {
@@ -13,7 +13,7 @@ import { enterWorld, loadWorld, reloadWorld } from "../../plugins/thirdroom/thir
 import { worldAtom } from "../state/world";
 import { useAuth } from "./useAuth";
 import { useMainThreadContext } from "./useMainThread";
-import { World, worldClient } from "../../client/world-client";
+import { World } from "../../client/world-client";
 
 export interface WorldLoader {
   loadAndEnterWorld: (

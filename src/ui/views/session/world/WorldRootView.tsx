@@ -1,6 +1,5 @@
 import { useAtomValue, useSetAtom } from "jotai";
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
 
 import { useIsMounted } from "../../../hooks/useIsMounted";
 import { useWorldPath } from "../../../hooks/useWorld";
@@ -15,7 +14,7 @@ import { editorEnabledAtom } from "../../../state/editor";
 import { worldClient, World } from "../../../../client/world-client";
 
 export default function WorldRootView() {
-  const { entered, loading, worldId: currentWorldId } = useAtomValue(worldAtom);
+  const { entered, loading } = useAtomValue(worldAtom);
   const setWorld = useSetAtom(worldAtom);
   const isMounted = useIsMounted();
   const [error, setError] = useState<Error>();

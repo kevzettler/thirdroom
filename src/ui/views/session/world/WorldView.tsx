@@ -14,7 +14,6 @@ import { Nametags } from "../nametags/Nametags";
 import { useMainThreadContext } from "../../../hooks/useMainThread";
 import { getModule, registerMessageHandler } from "../../../../engine/module/module.common";
 import { useToast } from "../../../hooks/useToast";
-import { useHydrogen } from "../../../hooks/useHydrogen";
 import { MainContext } from "../../../../engine/MainThread";
 import { createDisposables } from "../../../../engine/utils/createDisposables";
 import { useWebXRSession } from "../../../hooks/useWebXRSession";
@@ -29,7 +28,6 @@ import { WorldInteraction } from "./WorldInteraction";
 import {
   EnterWebXRAction,
   MembersDialogAction,
-  MuteButtonAction,
   ShortcutDialogAction,
   useToggleEditorAction,
   useTogglePhysicsDebugAction,
@@ -39,9 +37,7 @@ import {
 import { inputFocused } from "../../../utils/common";
 import { useDisableInput } from "../../../hooks/useDisableInput";
 import { editorEnabledAtom } from "../../../state/editor";
-import { usePowerLevels } from "../../../hooks/usePowerLevels";
 import { ObjectCapReachedMessage, ThirdRoomMessageType } from "../../../../plugins/thirdroom/thirdroom.common";
-
 import { World } from "../../../../client/world-client";
 import { useAuth } from "../../../../hooks/useAuth";
 

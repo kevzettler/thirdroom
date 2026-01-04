@@ -10,7 +10,6 @@ import { RoomTileTitle } from "../../../components/room-tile/RoomTileTitle";
 import MoreHorizontalIC from "../../../../../../res/ic/more-horizontal.svg";
 import { DropdownMenu } from "../../../../atoms/menu/DropdownMenu";
 import { DropdownMenuItem } from "../../../../atoms/menu/DropdownMenuItem";
-import { useDialog } from "../../../../hooks/useDialog";
 import { OverlayWindow, overlayWindowAtom } from "../../../../state/overlayWindow";
 import { World } from "../../../../../client/world-client";
 import { useAuth } from "../../../../hooks/useAuth";

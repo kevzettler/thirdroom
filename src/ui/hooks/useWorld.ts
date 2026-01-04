@@ -12,14 +12,14 @@ function useWorld(): [string | undefined, string | undefined, string | undefined
 }
 
 export function useWorldPath(): [string | undefined, string | undefined] {
-  const [worldId, alias, reloadId] = useWorld();
+  const [worldId, , reloadId] = useWorld();
 
   // For now, just use worldId directly (no alias support yet)
   return [worldId, reloadId];
 }
 
 export function useUnknownWorldPath(): [string | undefined, string | undefined] {
-  const [worldId, alias] = useWorld();
+  const [worldId] = useWorld();
 
   // Return worldId if present, alias support can be added later
   return [worldId, undefined];
