@@ -17,6 +17,10 @@ export const worlds = new Map<string, World>();
 const SYSTEM_USER_ID = "system";
 
 // Default worlds to seed on startup
+// Note: Only include GLB files that are complete world environments with:
+// - A floor/ground plane
+// - Spawn points (MX_spawn_point extension) 
+// - Proper lighting and environment
 const DEFAULT_WORLDS = [
   {
     id: "default_basketball_court",
@@ -26,13 +30,8 @@ const DEFAULT_WORLDS = [
     ownerId: SYSTEM_USER_ID,
     maxMemberObjectCap: 100,
   },
-  {
-    id: "default_sci_fi_crate",
-    name: "Sci-Fi Crate Demo",
-    sceneUrl: "sci_fi_crate.glb",
-    ownerId: SYSTEM_USER_ID,
-    maxMemberObjectCap: 50,
-  },
+  // Note: sci_fi_crate.glb is a prop model, not a world environment
+  // It lacks floors, spawn points, and proper environment setup
 ];
 
 // Seed default worlds on module load

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import classNames from "classnames";
 import { useAtom, useAtomValue } from "jotai";
 import { useNavigate } from "react-router-dom";
@@ -38,6 +38,7 @@ import { Scroll } from "../../../atoms/scroll/Scroll";
 import { ShortcutUI } from "./ShortcutUI";
 import { NametagsEnableMessage, NametagsEnableMessageType } from "../../../../engine/player/nametags.common";
 import { useLocalStorage } from "../../../hooks/useLocalStorage";
+import { EditorView } from "../editor/EditorView";
 
 const SHOW_NAMES_STORE = "showNames";
 
@@ -61,14 +62,14 @@ function SimpleWorldControls({
   const navigate = useNavigate();
   const [shortcutUI, setShortcutUI] = useState(false);
 
-  const toggleShortcutUI = () => setShortcutUI((state) => !state);
+  const toggleShortcutUI = useCallback(() => setShortcutUI((state) => !state), []);
   
-  const toggleShowNames = () => {
+  const toggleShowNames = useCallback(() => {
     const enabled = !showNames;
     setShowNames(enabled);
     mainThread.sendMessage<NametagsEnableMessageType>(Thread.Game, { type: NametagsEnableMessage, enabled });
     showToast(enabled ? "Show Names" : "Hide Names");
-  };
+  }, [mainThread, showNames, setShowNames, showToast]);
 
   useEffect(() => {
     mainThread.sendMessage<NametagsEnableMessageType>(Thread.Game, {
@@ -77,18 +78,35 @@ function SimpleWorldControls({
     });
   }, [mainThread, showNames]);
 
-  const handleExitWorld = () => {
+  const handleExitWorld = useCallback(() => {
     navigate("/");
-  };
+  }, [navigate]);
 
+  // Keyboard shortcuts for controls
   useKeyDown(
     (e) => {
       if (inputFocused()) return;
+      
+      // Alt + L to exit world
       if (e.altKey && e.code === "KeyL") {
         handleExitWorld();
+        return;
+      }
+      
+      // / key to toggle help dialog
+      if (e.key === "/" || e.code === "Slash") {
+        e.preventDefault();
+        toggleShortcutUI();
+        return;
+      }
+      
+      // N key to toggle names
+      if (e.code === "KeyN" && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        toggleShowNames();
+        return;
       }
     },
-    []
+    [handleExitWorld, toggleShortcutUI, toggleShowNames]
   );
 
   useDisableInput(shortcutUI);
@@ -144,7 +162,7 @@ export function SimpleWorldView({ world }: SimpleWorldViewProps) {
   const isWorldEntered = useAtomValue(worldAtom).entered;
   const [worldChatVisible, setWorldChatVisibility] = useAtom(worldChatVisibilityAtom);
   const [overlayVisible, setOverlayVisibility] = useAtom(overlayVisibilityAtom);
-  const [editorEnabled] = useAtom(editorEnabledAtom);
+  const [editorEnabled, setEditorEnabled] = useAtom(editorEnabledAtom);
   const { toastShown, toastContent, showToast } = useToast();
   const camRigModule = getModule(mainThread, PlayerModule);
   const [showNames, setShowNames] = useLocalStorage(SHOW_NAMES_STORE, true);
@@ -178,6 +196,13 @@ export function SimpleWorldView({ world }: SimpleWorldViewProps) {
 
         if (inputFocused()) return;
 
+        // Close editor on Escape
+        if (editorEnabled) {
+          mainThread.canvas?.requestPointerLock();
+          setEditorEnabled(false);
+          return;
+        }
+
         if (overlayVisible) {
           mainThread.canvas?.requestPointerLock();
           setOverlayVisibility(false);
@@ -188,8 +213,19 @@ export function SimpleWorldView({ world }: SimpleWorldViewProps) {
           return;
         }
       }
+      
+      // Backtick (`) to toggle editor
+      if (e.code === "Backquote" && !inputFocused()) {
+        setEditorEnabled((enabled) => {
+          if (!enabled) {
+            showToast("Editor Enabled");
+          }
+          return !enabled;
+        });
+        return;
+      }
     },
-    [worldChatVisible, overlayVisible, editorEnabled]
+    [worldChatVisible, overlayVisible, editorEnabled, setEditorEnabled, showToast]
   );
 
   useEvent(
@@ -228,6 +264,9 @@ export function SimpleWorldView({ world }: SimpleWorldViewProps) {
           />
         </>
       )}
+
+      {/* Editor View - scene hierarchy and properties panel */}
+      {editorEnabled && <EditorView />}
 
       {!overlayVisible && !editorEnabled && <WorldInteraction world={world} />}
 
